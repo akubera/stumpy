@@ -3,3 +3,5 @@
 #
 """
 """
+
+from .histogram import Histogram

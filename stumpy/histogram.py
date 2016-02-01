@@ -2,7 +2,7 @@
 # stumpy/histogram.py
 #
 """
-Histogram helper methods.
+Histogram helper classes/methods.
 """
 
 import numpy as np
@@ -50,7 +50,10 @@ class Histogram:
         ValueError
             The shape of the data and error arrays do not match.
         """
-        self.axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
+        if np.ndim(data) == 1:
+            self.axes = (Histogram.Axis(axis),)
+        else:
+            self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
 
     @classmethod
     def BuildFromData(cls, data, errors=None):
@@ -123,7 +126,8 @@ class Histogram:
         val : float or tuple of floats
             The value to look for in each axis.
         """
-        if val
+        def searchsorted(self, value, side, sorter):
+            return self.data.searchsorted(value, side, sorter)
 
     def domain(self, *ranges):
         if ranges is ():
@@ -277,7 +281,8 @@ class Histogram:
         """
 
         def __init__(self, data, ):
-            self._bin_centers = np.array(data)
+            self._bin_centers = data  # np.array(data)
+            return
             if not self._ptr.IsVariableBinSize():
                 maxbin = self._ptr.GetNbins() + 1
                 self.data = np.linspace(self._ptr.GetBinCenter(0),
@@ -305,17 +310,17 @@ class Histogram:
             axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
             return tuple(map(Histogram.Axis, axes))
 
-        def __getattr__(self, attr):
-            """
-            Forwards any attribute requests to the real axis object
-            """
-            return getattr(self._ptr, attr)
+        # def __getattr__(self, attr):
+        #     """
+        #     Forwards any attribute requests to the real axis object
+        #     """
+        #     return getattr(self._ptr, attr)
 
         def __getitem__(self, index):
             """
             Returns the value of bin specified by index
             """
-            return self.data[index]
+            return self._bin_centers[index]
 
         def bin_at(self, value):
             self._ptr
