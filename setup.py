@@ -8,7 +8,8 @@ A package to connect ROOT files to numpy projects.
 from os import path
 from glob import glob
 from setuptools import setup, find_packages
-from imp import load_source
+from importlib.machinery import SourceFileLoader
+
 
 NAME = 'stumpy'
 
@@ -43,7 +44,10 @@ CLASSIFIERS = [
     "Natural Language :: English",
 ]
 
-metadata = load_source("metadata", path.join("rooview", "__meta__.py"))
+metafile = path.join("stumpy", "__meta__.py")
+metadata = SourceFileLoader("stumpy.metadata", metafile).load_module()
+
+tar_url = 'https://github.com/akubera/stumpy/archive/v%s.tar.gz' % (metadata.version) # noqa
 
 setup(
     name=NAME,
