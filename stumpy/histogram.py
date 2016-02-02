@@ -7,8 +7,11 @@ Histogram helper classes/methods.
 
 import numpy as np
 
+import re
 import functools
 import itertools as itt
+import ROOT
+from stumpy.utils import ROOT_TO_NUMPY_DTYPE
 
 
 class Histogram:
@@ -54,6 +57,7 @@ class Histogram:
             self.axes = (Histogram.Axis(axis),)
         else:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
+        self.name = name
 
     @classmethod
     def BuildFromData(cls, data, errors=None):
@@ -78,7 +82,42 @@ class Histogram:
 
     @classmethod
     def BuildFromRootHist(cls, hist):
-        self = cls()
+        # typecheck
+        if not isinstance(hist, ROOT.TH1):
+            raise TypeError("Not a root histogram")
+
+        for next_class in hist.__class__.__mro__:
+            classname = next_class.__name__
+            m = re.search('TH[1-3](?P<root_type>[CSIFD])', classname)
+            if m:
+                dtype = ROOT_TO_NUMPY_DTYPE[m.group('root_type')]
+                break
+        else:
+            raise TypeError("Not a root histogram")
+
+        if isinstance(hist, ROOT.TH3):
+            print(">> TH3", hist)
+        elif isinstance(hist, ROOT.TH2):
+            print(">> TH2", hist)
+        elif isinstance(hist, ROOT.TH1):
+            nbins = hist.GetNbinsX()
+            shape = (nbins,)
+            underflow = hist.GetBinContent(0)
+            overflow = hist.GetBinContent(nbins + 1)
+            print(nbins, underflow, overflow)
+            print([(i, hist.GetBinContent(i)) for i in range(nbins-2, nbins + 3)])
+            buffer = hist.GetArray()
+
+        data = np.ndarray(shape=shape, dtype=dtype, buffer=buffer)
+        self = cls.__new__(cls)
+        self.data = data
+        self.name = hist.GetName()
+        self.title = hist.GetTitle()
+        self.overflow = overflow
+        self.underflow = underflow
+
+        return self
+
         self._ptr = hist
         self.data = root_numpy.hist2array(self._ptr, include_overflow=True)
         # add two overflow bins

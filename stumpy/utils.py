@@ -6,6 +6,15 @@ Utility methods
 """
 
 
+ROOT_TO_NUMPY_DTYPE = {
+    'C': 'i1',
+    'S': 'i2',
+    'I': 'i4',
+    'F': 'f4',
+    'D': 'f8',
+}
+
+
 def get_root_object(obj, paths):
     """
     Return a root object contained in the obj
