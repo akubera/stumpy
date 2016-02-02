@@ -98,7 +98,11 @@ class Histogram:
         if isinstance(hist, ROOT.TH3):
             print(">> TH3", hist)
         elif isinstance(hist, ROOT.TH2):
-            print(">> TH2", hist)
+            nbins = (hist.GetNbinsY() + 2, hist.GetNbinsX() + 2)
+            data = np.ndarray(shape=nbins, dtype=dtype, buffer=hist.GetArray()).T
+            underflow = data[0, :], data[:, 0]
+            overflow = data[nbins[1] - 1, :], data[:, nbins[0] - 1]
+            data = np.copy(data[1:-1, 1:-1])
         elif isinstance(hist, ROOT.TH1):
             nbins = hist.GetNbinsX()
             underflow = hist.GetBinContent(0)
