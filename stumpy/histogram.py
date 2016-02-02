@@ -101,14 +101,12 @@ class Histogram:
             print(">> TH2", hist)
         elif isinstance(hist, ROOT.TH1):
             nbins = hist.GetNbinsX()
-            shape = (nbins,)
             underflow = hist.GetBinContent(0)
             overflow = hist.GetBinContent(nbins + 1)
-            print(nbins, underflow, overflow)
-            print([(i, hist.GetBinContent(i)) for i in range(nbins-2, nbins + 3)])
             buffer = hist.GetArray()
+            buff_array = np.frombuffer(buffer, dtype=dtype, count=nbins+2)
+            data = np.copy(buff_array[1:-1])
 
-        data = np.ndarray(shape=shape, dtype=dtype, buffer=buffer)
         self = cls.__new__(cls)
         self.data = data
         self.name = hist.GetName()

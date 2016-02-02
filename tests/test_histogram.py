@@ -18,8 +18,10 @@ def h1f(ROOT):
     h1 = ROOT.TH1F("h", "hist title", 100, 0.0, 1.0)
     for num in np.random.random(1000):
         h1.Fill(num)
-    tuple(h1.Fill(5) for i in range(5))
-    tuple(h1.Fill(-5) for i in range(5))
+    tuple(h1.Fill(5) for i in range(100))
+    tuple(h1.Fill(-5) for i in range(106))
+    print('::', [h1.GetBinContent(i) for i in range(20)], end=' ... ')
+    print([h1.GetBinContent(i) for i in range(80, 103)])
     return h1
 
 
@@ -51,12 +53,15 @@ def test_histogram_constructor_ROOT_TH1(h1f):
     assert hist.title == h1f.GetTitle()
     assert hist.underflow == h1f.GetBinContent(0)
     assert hist.overflow == h1f.GetBinContent(101)
-
+    for i, x in enumerate(hist.data):
+        assert x == h1f.GetBinContent(i+1)
 
 def notest_histogram_constructor_ROOT_TH2(h2f):
     hist = Histogram.BuildFromRootHist(h2f)
-    print(hist.data)
     assert hist.shape is (100, 100, )
+    for i, x in enumerate(hist.data):
+        print(x)
+        assert x == h2f.GetBinContent(i+1)
 
 
 def test_histogram_constructor():
