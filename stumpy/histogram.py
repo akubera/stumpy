@@ -96,12 +96,16 @@ class Histogram:
             raise TypeError("Not a root histogram")
 
         if isinstance(hist, ROOT.TH3):
-            print(">> TH3", hist)
+            nbins = (hist.GetNbinsZ() + 2, hist.GetNbinsY() + 2, hist.GetNbinsX() + 2)
+            data = np.ndarray(shape=nbins, dtype=dtype, buffer=hist.GetArray()).T
+            underflow = data[0, :, :], data[:, 0, :], data[:, :, 0]
+            overflow = data[-1, :, :], data[:, -1, :], data[:, :, -1]
+            data = np.copy(data[1:-1, 1:-1, 1:-1])
         elif isinstance(hist, ROOT.TH2):
             nbins = (hist.GetNbinsY() + 2, hist.GetNbinsX() + 2)
             data = np.ndarray(shape=nbins, dtype=dtype, buffer=hist.GetArray()).T
             underflow = data[0, :], data[:, 0]
-            overflow = data[nbins[1] - 1, :], data[:, nbins[0] - 1]
+            overflow = data[-1, :], data[:, -1]
             data = np.copy(data[1:-1, 1:-1])
         elif isinstance(hist, ROOT.TH1):
             nbins = hist.GetNbinsX()

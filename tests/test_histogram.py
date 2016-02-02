@@ -4,6 +4,7 @@
 
 import pytest
 import numpy as np
+import itertools
 from stumpy.histogram import Histogram
 
 
@@ -36,7 +37,7 @@ def h2f(ROOT, rnd_seed):
     h2 = ROOT.TH2F("h2f", "hist title",
                    100, 0.0, 1.0,
                    70, 0.0, 1.0)
-    for x, y in np.random.random((50000, 2)):
+    for x, y in np.random.random((5000, 2)):
         h2.Fill(x, y)
 
     for v in np.random.random(1000):
@@ -52,11 +53,29 @@ def h2f(ROOT, rnd_seed):
 
 
 @pytest.fixture
-def h3(ROOT):
+def h3f(ROOT, rnd_seed):
+    np.random.seed(rnd_seed)
     h3 = ROOT.TH3F("h3f", "hist title",
-                   100, 0.0, 1.0,
-                   100, 0.0, 1.0,
-                   100, 0.0, 1.0)
+                   4, 0.0, 1.0,
+                   9, 0.0, 1.0,
+                   13, 0.0, 1.0)
+    for x, y, z in np.random.random((5000, 3)):
+        h3.Fill(x, y, z)
+
+    for y, z in np.random.random((5000, 2)):
+        h3.Fill(-1, y, z)
+    for x, z in np.random.random((5000, 2)):
+        h3.Fill(x, -1, z)
+    for x, y in np.random.random((5000, 2)):
+        h3.Fill(x, y, -1)
+
+    for y, z in np.random.random((5000, 2)):
+        h3.Fill(2, y, z)
+    for x, z in np.random.random((5000, 2)):
+        h3.Fill(x, 2, z)
+    for x, y in np.random.random((5000, 2)):
+        h3.Fill(x, y, 2)
+
     return h3
 
 
@@ -70,7 +89,7 @@ def test_histogram_constructor_ROOT_TH1(h1f):
     assert hist.overflow == h1f.GetBinContent(101)
     for i, x in enumerate(hist.data):
         assert x == h1f.GetBinContent(i+1)
-
+    h1f.Delete()
 
 def test_histogram_constructor_ROOT_TH2_simple(ROOT):
     h2f = ROOT.TH2F("h2f_simple", "hist title",
@@ -127,7 +146,7 @@ def test_histogram_constructor_ROOT_TH2_simple(ROOT):
             assert v == h2f.GetBinContent(x + 1, y + 1)
 
 
-@pytest.mark.parametrize('rnd_seed', [100, 45, 0, 0])
+@pytest.mark.parametrize('rnd_seed', [45, 100])
 def test_histogram_constructor_ROOT_TH2(h2f):
     hist = Histogram.BuildFromRootHist(h2f)
     assert hist.shape == (100, 70)
@@ -143,7 +162,31 @@ def test_histogram_constructor_ROOT_TH2(h2f):
     for x, xs in enumerate(hist.data):
         for y, v in enumerate(xs):
             assert v == h2f.GetBinContent(x + 1, y + 1)
+    h2f.Delete()
 
+
+@pytest.mark.parametrize('rnd_seed', [42, ])
+def test_histogram_constructor_ROOT_TH3(h3f):
+    hist = Histogram.BuildFromRootHist(h3f)
+    assert hist.shape == (4, 9, 13)
+
+    for j, k in itertools.product(range(9 + 2), range(13 + 2)):
+        assert h3f.GetBinContent(0, j, k) == hist.underflow[0][j, k]
+        assert h3f.GetBinContent(5, j, k) == hist.overflow[0][j, k]
+
+    for i, k in itertools.product(range(4 + 2), range(13 + 2)):
+        assert h3f.GetBinContent(i, 0, k) == hist.underflow[1][i, k]
+        assert h3f.GetBinContent(i, 10, k) == hist.overflow[1][i, k]
+
+    for i, j in itertools.product(range(4 + 2), range(9 + 2)):
+        assert h3f.GetBinContent(i, j, 0) == hist.underflow[2][i, j]
+        assert h3f.GetBinContent(i, j, 14) == hist.overflow[2][i, j]
+
+    for x, xs in enumerate(hist.data):
+        for y, ys in enumerate(xs):
+            for z, v in enumerate(ys):
+                assert v == h3f.GetBinContent(x + 1, y + 1, z + 1)
+    h3f.Delete()
 
 
 def test_histogram_constructor():
