@@ -21,6 +21,8 @@ class Histogram:
     structures.
     """
 
+    DEFAULT_AXIS_DATATYPE = 'low_edge'
+
     def __init__(self, data, axis, errors=None, name=None, **kwargs):
         """
         Construct the histogram from data.
@@ -54,7 +56,7 @@ class Histogram:
             The shape of the data and error arrays do not match.
         """
         if np.ndim(data) == 1:
-            self.axes = (Histogram.Axis(axis),)
+            self.axes = (Histogram.Axis(axis), )
         else:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
@@ -325,8 +327,51 @@ class Histogram:
         labels. Imitates the ROOT class TAxis.
         """
 
-        def __init__(self, data, ):
-            self._bin_centers = data  # np.array(data)
+        def __init__(self, data=None, **kwargs):
+            """
+            Keyword Args
+            ------------
+            labels : list of str
+                List of strings, offering ability to add text labels to bins
+            low_edges : np.array
+                Array of 'low' edges - conflicts with high_edges, centers
+            centers : np.array
+                Array of 'center' values - conflicts with low_edges, high_edges
+            high_edges : np.array
+                Array of 'high' edges - conflicts with low_edges, centers
+
+            count_min_max : tuple
+                Tuple containing the number of bins, the low x value, and the
+                high x value.
+            """
+            if sum(key in ('low_edges', 'centers', 'high_edges')
+                   for key in kwargs.keys()) > 1:
+                raise ValueError("Axis can only be set from ONE of low_edges, "
+                                 "centers, and high_edges")
+            if 'low_edges' in kwargs:
+                self._low_edges = np.copy(kwargs['low_edges'])
+                self._low_edges.flags.writeable = False
+                self._bin_width = self._low_edges[1] - self._low_edges[0]
+                self._xmin = self._low_edges[0]
+                self._xmax = self._low_edges[-1] + self._bin_width
+            elif 'high_edges' in kwargs:
+                self._high_edges = np.copy(kwargs['high_edges'])
+                self._high_edges.flags.writeable = False
+                self._bin_width = self._low_edges[1] - self._low_edges[0]
+                self._xmin = self._low_edges[0] - self._bin_width
+                self._xmax = self._low_edges[-1]
+            elif 'centers' in kwargs:
+                self._centers = np.copy(kwargs['centers'])
+                self._centers.flags.writeable = False
+                self._bin_width = self._low_edges[1] - self._low_edges[0]
+                self._xmin = self._low_edges[0] - self._bin_width / 2.0
+                self._xmax = self._low_edges[-1] + self._bin_width / 2.0
+            elif 'count_min_max' in kwargs:
+                nbins, self._xmin, self._xmax = kwargs['count_min_max']
+                self._low_edges = np.linspace(self._xmin, self._xmax, nbins, endpoint=False)
+                self._bin_width = self._low_edges[1] - self._low_edges[0]
+                self._low_edges.flags.writeable = False
+
             return
             if not self._ptr.IsVariableBinSize():
                 maxbin = self._ptr.GetNbins() + 1
@@ -347,13 +392,34 @@ class Histogram:
             return rval if fabs(value - rval) < fabs(value - lval) else lval
 
         @classmethod
-        def BuildFromHist(self, hist):
+        def BuildWithLinearSpacing(cls, nbins, min_x, max_x, **kwargs):
+            self = cls(count_min_max=(nbins, min_x, max_x,), **kwargs)
+            return self
+
+        @classmethod
+        def BuildFromROOTAxis(cls, axis):
+            nbins = axis.GetNbins()
+            if axis.IsVariableBinSize():
+                bin_array = np.frombuffer(axis.GetXbins(), dtype='f8', count=nbins)
+                self = cls(bin_array)
+            else:
+                self = cls.BuildWithLinearSpacing(nbins,
+                                                  axis.GetXmin(),
+                                                  axis.GetXmax())
+                bin_array = ()
+
+        @classmethod
+        def BuildAxisTupleFromRootHist(cls, hist):
             """
             Returns tuple of 3 Axis objects, corresponding to the x,y,z axes of
             the hist argument
             """
             axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
-            return tuple(map(Histogram.Axis, axes))
+            return tuple(map(cls.BuildFromROOTAxis, axes))
+
+        @property
+        def props(self):
+            self.foo
 
         # def __getattr__(self, attr):
         #     """
@@ -455,13 +521,3 @@ class Histogram:
             """
             s = self.getslice(value)
             return self.data[s]
-
-
-    class Mask:
-        """
-        A class wrapping a numpy array-mask used for keeping same shape between
-        data and error arrays
-        """
-
-        def __init__(self, hist):
-            self.hist = hist
