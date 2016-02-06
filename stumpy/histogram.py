@@ -149,6 +149,53 @@ class Histogram:
     def shape(self):
         return self.data.shape
 
+    def fill(self, *data):
+        """
+        Fill bin found at 'data' by an unweighted value of 1.0.
+        """
+        try:
+            bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
+        except:
+            raise
+        self.data[bins] += 1.0
+        return bins
+
+    def fill_all(self, data):
+        """
+        Fill histogram with all values in data. This is a helper method to
+        automatically fill the histogram with a collection of data.
+
+        For example, if this is a two dimensional histogram, create a numpy
+        array with shape (X, 2) to fill the histogram with X pairs.
+
+        Parameters
+        ----------
+        data : iterable
+            Data is an iterable returning N numbers, where N is dimension of
+            histogram.
+        """
+        for d in data:
+            bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
+            self.data[bins] += 1.0
+
+    def fillw(self, *data, weight=None):
+        """
+        Fill histogram bin containing 'data' with weight.
+
+        There are two ways to use this method - the weight keyword argument is
+        None, and data is an array of N + 1 dimensions, where N is dimension of
+        this histogram, where the last value in data is the weight
+
+        Or weight is NOT none, and data is an N dimension collection.
+
+
+        """
+        if weight is None:
+            *data, weight = data
+        bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
+        self.data[bins] += weight
+        return bins
+
     # @functools.lru_cache
     def __getitem__(self, val):
         """

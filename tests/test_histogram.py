@@ -197,3 +197,26 @@ def test_histogram_constructor():
     # x_axis = hist.axes[0]
     # assert len(x_axis._bin_centers) is 45
     # assert x_axis[2] == 45/990
+
+def test_1d_histogram_fill():
+    # hist = TH1D()
+    pass
+
+@pytest.fixture
+def ph1():
+    min, max = 0, 20
+    hist = Histogram(np.array(10, min, max))
+    hist.fill(np.random.poisson(5, 10000))
+    return hist
+
+
+def test_histogram_division():
+    np.random.seed(42)
+    data = np.random.random(45)
+    axis = np.linspace(0.0, 1.0, num=45)
+    hist = Histogram(data, axis)
+    assert len(hist.axes) is 1
+
+    # x_axis = hist.axes[0]
+    # assert len(x_axis._bin_centers) is 45
+    # assert x_axis[2] == 45/990
