@@ -10,6 +10,7 @@ import numpy as np
 import re
 import functools
 import itertools as itt
+from copy import copy
 import ROOT
 from stumpy.utils import ROOT_TO_NUMPY_DTYPE
 
@@ -60,9 +61,13 @@ class Histogram:
         else:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
+        self.data = data
+        self.errors = errors if (errors is not None) else np.sqrt(errors)
 
     @classmethod
     def BuildFromData(cls, data, errors=None):
+        """
+        """
         self = cls()
         self.data = root_numpy.hist2array(self._ptr, include_overflow=True)
         # add two overflow bins
@@ -80,7 +85,6 @@ class Histogram:
         assert self.data.shape == tuple(a.data.shape[0] for a in self._axes)
         self.mask = Histogram.Mask(self)
         return self
-
 
     @classmethod
     def BuildFromRootHist(cls, hist):
@@ -196,17 +200,41 @@ class Histogram:
         self.data[bins] += weight
         return bins
 
-    # @functools.lru_cache
+    def __copy__(self, orig):
+        """
+        Create a copy of this histogram. Essentially calls np.copy on all data
+        structure.
+        """
+        the_copy = Histogram(data=np.copy(orig.data),
+                             errors=np.copy(orig.data))
+        return the_copy
+
     def __getitem__(self, val):
         """
-        Returns the value of bin specified by value val. If val is a float, the
-        corresponding bin is searched for automatically and the value returned
+        Returns the value of bin containing the value val. If val is an
+        integer, this is interpreted as a bin number, and the value at index
+        val is returned.  If val is a float, the corresponding bin is searched
+        for automatically and the value returned. If the val is tuple of values
+
+
+        Examples
+        --------
+        # get value at 4.2
+        hist[4.2]
+
+        # get value in two dimensional hist
+        hist2d[4.2, 5.0]
+
+        # get numpy array of values between 0.5 and 1.0 - inclusive
+        hist2d[0.5:1.0]
         """
-        if isinstance(val, tuple):
-            val = tuple(axis.getbin(v) for v, axis in zip(val, self._axes))
+        if isinstance(val, int):
+            return self.data[val]
+        elif isinstance(val, tuple):
+            bins = tuple(axis.getbin(v) for v, axis in zip(val, self._axes))
+            return self.data[bins]
         else:
-            val = self._axes[0].getbin(val)
-        return self.data[val]
+            return self.data[self.axis.getbin(val)]
 
     def find_bin(self, val):
         """
@@ -355,6 +383,46 @@ class Histogram:
     #
     # Math Functions
     #
+    def __radd__(self, lhs):
+        """
+        Rightside add. Applies standard (lefthand) addition, as addition is a
+        communitive operation on histograms.
+        """
+        return self.__add__(lhs)
+
+    def __add__(self, rhs):
+        """
+        Create a new histogram which is the result of the addition of the two
+        histograms. The histograms must have the same shape and bins.
+
+        Errors are propagated as expected:
+        .. math::
+            error =
+
+        Raises
+        ------
+        ValueError
+            If the two histograms have different shape.
+        """
+        hist = copy(self)
+        hist += rhs
+        return hist
+
+    def __iadd__(self, rhs):
+        """
+        In place add method.
+        """
+        self.data += rhs.data
+        self.errors = self.errors ** 2 + rhs.errors  ** 2
+
+    def add(self, rhs, scale=1.0):
+        """
+        Explicit add method, able to automatically scale the right hand side
+        with the value scale histogram.
+        """
+        if scale != 1.0:
+            self.data
+
     def __truediv__(self, rhs):
         if isinstance(rhs, Histogram):
             quotient = self._ptr.Clone()
