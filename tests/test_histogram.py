@@ -191,7 +191,7 @@ def test_histogram_constructor():
     np.random.seed(42)
     data = np.random.random(45)
     axis = np.linspace(0.0, 1.0, num=45)
-    hist = Histogram(data, axis)
+    hist = Histogram.BuildFromData(data, axis)
     assert len(hist.axes) is 1
 
     # x_axis = hist.axes[0]
@@ -214,7 +214,7 @@ def test_histogram_division():
     np.random.seed(42)
     data = np.random.random(45)
     axis = np.linspace(0.0, 1.0, num=45)
-    hist = Histogram(data, axis)
+    hist = Histogram.BuildFromData(data, axis)
     assert len(hist.axes) is 1
 
     # x_axis = hist.axes[0]
