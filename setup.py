@@ -24,6 +24,10 @@ TESTS_REQUIRE = [
     'pytest-asyncio',
 ]
 
+SETUP_REQUIRES = [
+    'pytest-runner',
+]
+
 PACKAGES = find_packages(
     exclude=["*.tests", "*.tests.*", "tests.*", "tests"]
 )
@@ -62,6 +66,7 @@ setup(
     install_requires=REQUIRES,
     extras_require=OPTIONAL_REQUIRES,
     tests_require=TESTS_REQUIRE,
+    setup_requires=SETUP_REQUIRES,
     packages=PACKAGES,
     namespace_packages=NAMESPACES,
     platforms='all',
