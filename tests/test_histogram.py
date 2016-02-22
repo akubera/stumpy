@@ -223,6 +223,19 @@ def test_histogram_addition():
         assert cy == ay + by
 
 
+def test_histogram_subtraction():
+    np.random.seed(42)
+    a = np.random.random(45)
+    b = np.random.random(45)
+    axis = np.linspace(0.0, 1.0, num=45)
+    hist_a = Histogram.BuildFromData(a, axis)
+    hist_b = Histogram.BuildFromData(b, axis)
+    hist_c = hist_a - hist_b
+
+    for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
+        assert cy == ay - by
+
+
 def test_histogram_division():
     np.random.seed(42)
     a = np.random.random(45)

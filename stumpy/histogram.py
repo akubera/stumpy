@@ -9,7 +9,7 @@ import numpy as np
 
 import re
 import functools
-import decimal
+from decimal import Underflow, Overflow
 import itertools as itt
 from itertools import zip_longest
 from copy import copy
@@ -209,9 +209,9 @@ class Histogram:
         try:
             self.data[bins] += 1.0
         except IndexError:
-            if bins[0] == decimal.Underflow:
+            if bins[0] == Underflow:
                 self.underflow += 1.0
-            elif bins[0] == decimal.Overflow:
+            elif bins[0] == Overflow:
                 self.overflow += 1.0
 
         return bins
@@ -252,9 +252,9 @@ class Histogram:
         try:
             self.data[bins] += weight
         except IndexError:
-            if bins[0] == decimal.Underflow:
+            if bins[0] == Underflow:
                 self.underflow += weight
-            elif bins[0] == decimal.Overflow:
+            elif bins[0] == Overflow:
                 self.overflow += weight
         return bins
 
@@ -300,7 +300,7 @@ class Histogram:
 
         Return the bin number, or tuple, which contains the value val. If the
         bin falls  outside the range of this histogram, this will return either
-        a  decimal.Underflow or decimal.Overflow instance.
+        a Underflow or Overflow instance.
 
         Parameters
         ----------
@@ -494,11 +494,30 @@ class Histogram:
 
     def add(self, rhs, scale=1.0):
         """
-        Explicit add method, able to automatically scale the right hand side
-        with the value scale histogram.
+        Explicit add method, able to automatically scale the right hand side.
         """
-        if scale != 1.0:
-            self.data
+        if scale == 1.0:
+            return self + rhs
+
+        hist = rhs / scale
+        hist += self
+        return hist
+
+    def __sub__(self, rhs):
+        """
+        Histogram Subtraction
+        """
+        hist = copy(self)
+        hist -= rhs
+        return hist
+
+    def __isub__(self, rhs):
+        """
+        Inplace Histogram Subtraction
+        """
+        self.data -= rhs.data
+        self.errors = self.errors ** 2 + rhs.errors  ** 2
+        return self
 
     def __truediv__(self, rhs):
         """
@@ -520,8 +539,15 @@ class Histogram:
             raise TypeError("Cannot divide histogram by %r" % rhs)
 
     def __itruediv__(self, rhs):
-        self.data /= rhs.data
-        self.errors = self.errors * self.data + rhs.errors * rhs.data / (rhs.data + self.data)
+        """
+        Inplace histogram division
+        """
+        if isinstance(rhs, Histogram):
+            self.data /= rhs.data
+            self.errors = self.errors * self.data + rhs.errors * rhs.data / (rhs.data + self.data)
+        elif isinstance(rhs, float):
+            self.data /= rhs
+            self.errors /= rhs
         return self
 
     class Axis:
@@ -658,9 +684,9 @@ class Histogram:
             if isinstance(value, float):
                 idx = np.searchsorted(self._low_edges, value)
                 if idx == 0:
-                    return decimal.Underflow
+                    return Underflow
                 elif idx >= len(self._low_edges):
-                    return decimal.Overflow
+                    return Overflow
                 else:
                     return idx
             if isinstance(value, slice):
