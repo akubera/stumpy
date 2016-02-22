@@ -9,7 +9,9 @@ import numpy as np
 
 import re
 import functools
+import decimal
 import itertools as itt
+from itertools import zip_longest
 from copy import copy
 from stumpy.utils import ROOT_TO_NUMPY_DTYPE
 
@@ -80,7 +82,8 @@ class Histogram:
                               for axis_param in axis_parameters)
 
         shape = tuple(axis.nbins for axis in self.axes)
-
+        self.data = np.zeros(shape)
+        self.underflow, self.overflow = 0.0, 0.0
 
     @classmethod
     def BuildFromData(cls, data, axis, errors=None, name=None, **kwargs):
@@ -116,13 +119,14 @@ class Histogram:
             The shape of the data and error arrays do not match.
         """
         self = cls.__new__(cls)
-        if np.ndim(data) == 1:
+        if isinstance(axis, tuple) and len(axis) == 1:
+            self.axes = (Histogram.Axis(axis[0]), )
+        elif np.ndim(data) == 1:
             self.axes = (Histogram.Axis(axis), )
         else:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
         self.data = data
-        print("np:",np, errors)
         self.errors = errors if (errors is not None) else np.sqrt(self.data)
         return self
 
@@ -202,7 +206,14 @@ class Histogram:
             bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
         except:
             raise
-        self.data[bins] += 1.0
+        try:
+            self.data[bins] += 1.0
+        except IndexError:
+            if bins[0] == decimal.Underflow:
+                self.underflow += 1.0
+            elif bins[0] == decimal.Overflow:
+                self.overflow += 1.0
+
         return bins
 
     def fill_all(self, data):
@@ -238,16 +249,23 @@ class Histogram:
         if weight is None:
             *data, weight = data
         bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
-        self.data[bins] += weight
+        try:
+            self.data[bins] += weight
+        except IndexError:
+            if bins[0] == decimal.Underflow:
+                self.underflow += weight
+            elif bins[0] == decimal.Overflow:
+                self.overflow += weight
         return bins
 
-    def __copy__(self, orig):
+    def __copy__(self):
         """
         Create a copy of this histogram. Essentially calls np.copy on all data
         structure.
         """
-        the_copy = Histogram(data=np.copy(orig.data),
-                             errors=np.copy(orig.data))
+        the_copy = Histogram.BuildFromData(data=np.copy(self.data),
+                                           errors=np.copy(self.data),
+                                           axis=self.axes)
         return the_copy
 
     def __getitem__(self, val):
@@ -338,18 +356,35 @@ class Histogram:
             return tuple(x for x in res for x in x)
         return res
 
-    def bin_at(self, x, y=0.0, z=0.0):
-        return tuple(axis.bin_at(a) for axis, a in zip(self._axes, (x, y, z)))
+    def bin_at(self, *x):
+        """
+        Find and return the bin location which contains the value 'x'. The
+        number of values in x must equal the dimension of the histogram.
+        """
+        return tuple(axis.bin_at(a) for axis, a in zip_longest(self._axes, x))
 
-    def getslice(self, x, y=0.0, z=0.0):
-        return tuple(axis.getslice(a) for axis, a in zip(self._axes, (x, y, z)))
+    def getslice(self, *x):
+        """
+        Find and return the bin location which contains the value 'x'. The
+        number of values in x must equal the dimension of the histogram.
+        """
+        get_slice = Histogram.Axis.getslice
+        return tuple(itt.starmap(get_slice, zip_longest(self._axes, x)))
 
     def value_at(self, x, y=0.0, z=0.0):
-        i, j, k = self.bin_at(x, y, z)
-        return self.data[i, j, k]
+        """
+        Return the value stored in the bin which contains the value 'x'. The
+        number of values in x must equal the dimension of the histogram.
+        """
+        a_bin = self.bin_at(x, y, z)
+        return self.data[a_bin]
 
-    def value_in(self, i, j=0, k=0):
-        return self.data[i, j, k]
+    def value_in(self, *i):
+        """
+        Return the value located in bin 'i'. This is equivalent to using the
+        [] operator with a tuple of integers.
+        """
+        return self.data[i]
 
     def project_1d(self, axis_idx, *axis_ranges, bounds=(None, None)):
         """
@@ -455,6 +490,7 @@ class Histogram:
         """
         self.data += rhs.data
         self.errors = self.errors ** 2 + rhs.errors  ** 2
+        return self
 
     def add(self, rhs, scale=1.0):
         """
@@ -465,17 +501,28 @@ class Histogram:
             self.data
 
     def __truediv__(self, rhs):
+        """
+        Divide histogram.
+        If right hand side is a number, this simply scales the histogram. If
+        right hand side is another histogram, this will do bin-by-bin division,
+        adding errors appropriately.
+        """
         if isinstance(rhs, Histogram):
-            quotient = self._ptr.Clone()
-            quotient.Divide(rhs._ptr)
-            q = Histogram.BuildFromRootHist(quotient)
-            return q
+            quotient = copy(self)
+            quotient /= rhs
+            return quotient
         elif isinstance(rhs, float):
-            clone = self._ptr.Clone()
-            clone.Scale(1.0 / rhs)
-            return Histogram.BuildFromRootHist(clone)
+            quotient = copy(self)
+            # quotient.Scale(1.0 / rhs)
+            quotient.data /= rhs
+            return quotient
         else:
             raise TypeError("Cannot divide histogram by %r" % rhs)
+
+    def __itruediv__(self, rhs):
+        self.data /= rhs.data
+        self.errors = self.errors * self.data + rhs.errors * rhs.data / (rhs.data + self.data)
+        return self
 
     class Axis:
         """
@@ -533,6 +580,7 @@ class Histogram:
                 self._low_edges = data._low_edges
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
             else:
+                print("DAA:", data)
                 self._low_edges = data
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
             self._xmin = self._low_edges[0]
@@ -608,7 +656,13 @@ class Histogram:
             Return the bin relating to value
             """
             if isinstance(value, float):
-                return self._ptr.FindBin(value)
+                idx = np.searchsorted(self._low_edges, value)
+                if idx == 0:
+                    return decimal.Underflow
+                elif idx >= len(self._low_edges):
+                    return decimal.Overflow
+                else:
+                    return idx
             if isinstance(value, slice):
                 return slice(*map(self.getbin, (value.start, value.stop)))
             if isinstance(value, (tuple, list)):

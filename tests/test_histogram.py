@@ -210,13 +210,43 @@ def ph1():
     return hist
 
 
+def test_histogram_addition():
+    np.random.seed(42)
+    a = np.random.random(45)
+    b = np.random.random(45)
+    axis = np.linspace(0.0, 1.0, num=45)
+    hist_a = Histogram.BuildFromData(a, axis)
+    hist_b = Histogram.BuildFromData(b, axis)
+    hist_c = hist_a + hist_b
+
+    for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
+        assert cy == ay + by
+
+
 def test_histogram_division():
     np.random.seed(42)
-    data = np.random.random(45)
+    a = np.random.random(45)
+    b = np.random.random(45)
     axis = np.linspace(0.0, 1.0, num=45)
-    hist = Histogram.BuildFromData(data, axis)
-    assert len(hist.axes) is 1
+    hist_a = Histogram.BuildFromData(a, axis)
+    hist_b = Histogram.BuildFromData(b, axis)
+    hist_c = hist_a / hist_b
 
-    # x_axis = hist.axes[0]
-    # assert len(x_axis._bin_centers) is 45
-    # assert x_axis[2] == 45/990
+    for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
+        assert cy == ay / by
+
+
+def test_histogram_division_by_float():
+    np.random.seed(42)
+    hist_a = Histogram(45, 0.0, 1.0)
+    hist_b = Histogram(45, 0.0, 1.0)
+    scale = 5.5
+
+    for x in np.random.random(450):
+        hist_a.fill(x)
+        hist_b.fillw(x, 1 / scale)
+    hist_c = hist_a / scale
+
+    for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
+        assert cy == ay / 5.5
+        assert cy - by < 1e-15
