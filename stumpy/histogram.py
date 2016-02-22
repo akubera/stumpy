@@ -83,6 +83,7 @@ class Histogram:
 
         shape = tuple(axis.nbins for axis in self.axes)
         self.data = np.zeros(shape)
+        self._errors = None
         self.underflow, self.overflow = 0.0, 0.0
 
     @classmethod
@@ -193,6 +194,17 @@ class Histogram:
         assert self.data.shape == tuple(a.data.shape[0] for a in self._axes)
         self.mask = Histogram.Mask(self)
         return self
+
+    @property
+    def errors(self):
+        if self._errors is None:
+            return np.sqrt(self.data)
+        return self._errors
+
+    @errors.setter
+    def errors(self, errs):
+        assert errs.shape == self.data.shape
+        self._errors = errs
 
     @property
     def shape(self):

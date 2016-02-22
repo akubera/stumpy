@@ -236,6 +236,23 @@ def test_histogram_subtraction():
         assert cy == ay - by
 
 
+def test_histogram_subtraction_again():
+    np.random.seed(42)
+
+    hist_a = Histogram(45, 0, 1.0)
+    hist_b = Histogram(45, 0, 1.0)
+
+    for x in np.random.random(450):
+        hist_a.fill(x)
+
+    for x in np.random.random(500):
+        hist_b.fill(x)
+
+    hist_c = hist_a - hist_b
+
+    for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
+        assert cy == ay - by
+
 def test_histogram_division():
     np.random.seed(42)
     a = np.random.random(45)
