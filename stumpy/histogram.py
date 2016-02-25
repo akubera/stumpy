@@ -307,6 +307,25 @@ class Histogram:
         else:
             return self.data[self.axis.getbin(val)]
 
+    def AsRootHist(self, **kwargs):
+        """
+        Return a ROOT histogram which is equivalent of this.
+        """
+        import ROOT
+        hist_classname = 'TH%d%c' % (self.data.ndim, {
+                                        np.int64: 'I',
+                                        np.int32: 'I',
+                                        np.float32: 'F',
+                                        np.float64: 'D',
+                                     }[self.dtype])
+        hist_class = getattr(ROOT, hist_classname)
+        axis_info = np.array([(axis.nbins, axis.min, axis.max)
+            for axis in self.axes
+        ]).flatten()
+
+        hist = hist_class(self.name, self.title, *axis_info)
+        return hist
+
     def find_bin(self, val):
         """
 
