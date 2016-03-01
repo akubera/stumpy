@@ -10,6 +10,7 @@ import numpy as np
 import re
 import functools
 from decimal import Underflow, Overflow
+import operator as op
 import itertools as itt
 from itertools import zip_longest
 from copy import copy
@@ -85,6 +86,7 @@ class Histogram:
         self.data = np.zeros(shape)
         self._errors = None
         self.underflow, self.overflow = 0.0, 0.0
+        self.title = kwargs.pop('title', '<Histogram Title>')
 
     @classmethod
     def BuildFromData(cls, data, axis, errors=None, name=None, **kwargs):
@@ -128,7 +130,7 @@ class Histogram:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
         self.data = data
-        self.errors = errors if (errors is not None) else np.sqrt(self.data)
+        self._errors = errors
         return self
 
     @classmethod
@@ -174,6 +176,10 @@ class Histogram:
         self.overflow = overflow
         self.underflow = underflow
 
+        self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(hist)
+        self._errors = None
+        # root_numpy.array
+        # root_numpy.GetSumw2()
         return self
 
         self._ptr = hist
@@ -181,12 +187,9 @@ class Histogram:
         # add two overflow bins
         # error_shape = np.array(list(self.data.shape)) + [2, 2, 2]
         error_shape = self.data.shape
-        errors = root_numpy.array(self._ptr.GetSumw2())
+        # errors = root_numpy.array(self._ptr.)
         self.error = np.sqrt(errors).reshape(error_shape)
-        # print(">>", self.error[4, 4, 4])
-        # print(">>", hist.GetBinError(4, 4, 4))
         self._axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
-        self._axes = Histogram.Axis.BuildFromHist(hist)
         self._axis_data = np.array(list(
             [axis.GetBinCenter(i) for i in range(1, axis.GetNbins() + 1)]
             for axis in self._axes
@@ -276,8 +279,9 @@ class Histogram:
         structure.
         """
         the_copy = Histogram.BuildFromData(data=np.copy(self.data),
-                                           errors=np.copy(self.data),
+                                           errors=np.copy(self.errors),
                                            axis=self.axes)
+        the_copy.title = self.title
         return the_copy
 
     def __getitem__(self, val):
@@ -302,10 +306,11 @@ class Histogram:
         if isinstance(val, int):
             return self.data[val]
         elif isinstance(val, tuple):
-            bins = tuple(axis.getbin(v) for v, axis in zip(val, self._axes))
+            # bins = tuple(axis.getbin(v) for v, axis in zip(val, self.axes))
+            bins = tuple(functools.starmap(op.getitem, zip(val, self.axes)))
             return self.data[bins]
         else:
-            return self.data[self.axis.getbin(val)]
+            return self.data[self.axes[0].getbin(val)]
 
     def AsRootHist(self, **kwargs):
         """
@@ -481,7 +486,7 @@ class Histogram:
 
     def __str__(self):
         return '<{dim}D Histogram "{name}" ({sizes}) at {id}>'.format(
-            name=self._ptr.GetName(),
+            name=self.name,
             dim=self.data.ndim,
             sizes="-".join(map(str, self.data.shape)),
             id="0x%x" % id(self),
@@ -520,7 +525,7 @@ class Histogram:
         In place add method.
         """
         self.data += rhs.data
-        self.errors = self.errors ** 2 + rhs.errors  ** 2
+        self._errors = np.sqrt(self.errors ** 2 + rhs.errors  ** 2)
         return self
 
     def add(self, rhs, scale=1.0):
@@ -547,15 +552,38 @@ class Histogram:
         Inplace Histogram Subtraction
         """
         self.data -= rhs.data
-        self.errors = self.errors ** 2 + rhs.errors  ** 2
+        self._errors = np.sqrt(self.errors ** 2 + rhs.errors  ** 2)
         return self
+
+
+    def __mul__(self, rhs):
+        """
+        Histogram Multiplication
+        """
+        hist = copy(self)
+        hist *= rhs
+        return hist
+
+    def __imul__(self, rhs):
+        """
+        Histogram Multiplication
+        """
+        if isinstance(rhs, (int, float)):
+            self.data *= rhs
+            self._errors *= rhs
+            return self
+        else:
+            raise TypeError("Unknown type:", type(rhs))
 
     def __truediv__(self, rhs):
         """
-        Divide histogram.
-        If right hand side is a number, this simply scales the histogram. If
-        right hand side is another histogram, this will do bin-by-bin division,
-        adding errors appropriately.
+        Histogram Division
+
+        If right hand side is a number, this simply scales the data and errors
+        in the histogram.
+
+        If right hand side is another histogram, this will do bin-by-bin
+        division, calculating errors appropriately.
         """
         if isinstance(rhs, Histogram):
             quotient = copy(self)
@@ -571,15 +599,60 @@ class Histogram:
 
     def __itruediv__(self, rhs):
         """
-        Inplace histogram division
+        Inplace histogram division.
         """
         if isinstance(rhs, Histogram):
+            num_sq, den_sq = self.data ** 2, rhs.data ** 2
+            num_e_sq, den_e_sq = self.errors ** 2, rhs.errors ** 2
+            self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq) / den_sq
             self.data /= rhs.data
-            self.errors = self.errors * self.data + rhs.errors * rhs.data / (rhs.data + self.data)
+
         elif isinstance(rhs, float):
             self.data /= rhs
-            self.errors /= rhs
+            self._errors /= rhs
+
         return self
+
+    def triple_at(self, index):
+        """
+        Helper method for yielding a particular (x, y, e) triple in the hist
+        """
+        return self.axes[0][index], self.data[index], self.errors[index]
+
+    def triples(self):
+        """
+        Helper method for yielding all (x, y, e) values in histogram.
+        """
+        for index in range(len(self.data)):
+            yield self.axes[0][index], self.data[index], self.errors[index]
+
+    @property
+    def x_axis(self):
+        """
+        Returns the first (zeroth) axis in histogram.
+        """
+        return self.axes[0]
+
+    @property
+    def y_axis(self):
+        """
+        Returns the second axis in histogram.
+        """
+        return self.axes[1]
+
+    @property
+    def z_axis(self):
+        """
+        Returns the third axis in histogram.
+        """
+        return self.axes[2]
+
+    def nth_axis(self, idx):
+        """
+        Returns the nth axis in histogram - zero based. Simply access this from
+        the axis tuple.
+        """
+        return self.axes[idx]
 
     class Axis:
         """
@@ -636,8 +709,8 @@ class Histogram:
             elif isinstance(data, Histogram.Axis):
                 self._low_edges = data._low_edges
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
+                self.title = data.title
             else:
-                print("DAA:", data)
                 self._low_edges = data
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
             self._xmin = self._low_edges[0]
@@ -668,7 +741,7 @@ class Histogram:
             return self
 
         @classmethod
-        def BuildFromROOTAxis(cls, axis):
+        def BuildFromROOTAxis(cls, axis, ):
             nbins = axis.GetNbins()
             if axis.IsVariableBinSize():
                 bin_array = np.frombuffer(axis.GetXbins(), dtype='f8', count=nbins)
@@ -677,7 +750,8 @@ class Histogram:
                 self = cls.BuildWithLinearSpacing(nbins,
                                                   axis.GetXmin(),
                                                   axis.GetXmax())
-                bin_array = ()
+            self.title = axis.GetTitle()
+            return self
 
         @classmethod
         def BuildAxisTupleFromRootHist(cls, hist):
@@ -685,7 +759,8 @@ class Histogram:
             Returns tuple of 3 Axis objects, corresponding to the x,y,z axes of
             the hist argument
             """
-            axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
+            hist_axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
+            axes = hist_axes[:hist.GetDimension()]
             return tuple(map(cls.BuildFromROOTAxis, axes))
 
         @property
@@ -702,7 +777,15 @@ class Histogram:
             """
             Returns the value of bin specified by index
             """
-            return self._bin_centers[index]
+            return self.bin_centers[index]
+
+        @property
+        def bin_centers(self):
+            try:
+                return self._centers
+            except AttributeError:
+                self._centers = self._low_edges + self._bin_width / 2.0
+                return self._centers
 
         def bin_at(self, value):
             self._ptr
