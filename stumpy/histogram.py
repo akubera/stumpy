@@ -178,24 +178,6 @@ class Histogram:
 
         self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(hist)
         self._errors = None
-        # root_numpy.array
-        # root_numpy.GetSumw2()
-        return self
-
-        self._ptr = hist
-        self.data = root_numpy.hist2array(self._ptr, include_overflow=True)
-        # add two overflow bins
-        # error_shape = np.array(list(self.data.shape)) + [2, 2, 2]
-        error_shape = self.data.shape
-        # errors = root_numpy.array(self._ptr.)
-        self.error = np.sqrt(errors).reshape(error_shape)
-        self._axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
-        self._axis_data = np.array(list(
-            [axis.GetBinCenter(i) for i in range(1, axis.GetNbins() + 1)]
-            for axis in self._axes
-        ))
-        assert self.data.shape == tuple(a.data.shape[0] for a in self._axes)
-        self.mask = Histogram.Mask(self)
         return self
 
     @property
@@ -348,9 +330,9 @@ class Histogram:
 
     def domain(self, *ranges):
         if ranges is ():
-            domains = iter(axis.domain() for axis in self._axes)
+            domains = iter(axis.domain() for axis in self.axes)
         else:
-            axis_range_pairs = zip(self._axes, ranges)
+            axis_range_pairs = zip(self.axes, ranges)
             domains = iter(axis.domain(r) for axis, r in axis_range_pairs)
         return itt.product(*domains)
 
@@ -360,9 +342,9 @@ class Histogram:
         this axis' domain.
         """
         if ranges is ():
-            domains = iter(axis.domain() for axis in self._axes)
+            domains = iter(axis.domain() for axis in self.axes)
         else:
-            axis_range_pairs = zip(self._axes, ranges)
+            axis_range_pairs = zip(self.axes, ranges)
             domains = iter(axis.bounded_domain(r) for axis, r in axis_range_pairs)
 
         return np.array([l for l in itt.product(*domains)])
@@ -371,7 +353,7 @@ class Histogram:
         """
         zips ranges with axes to generate bin_ranges
         """
-        return tuple(a.getbin(r) for a, r in zip(self._axes, ranges))
+        return tuple(a.getbin(r) for a, r in zip(self.axes, ranges))
 
     def centered_bin_ranges(self, *ranges, expand=False, inclusive=False):
         """
@@ -379,7 +361,7 @@ class Histogram:
         pairs, or if expand is True, returns one flattened tuple of ints.
         """
         res = []
-        for r, a in zip(ranges, self._axes):
+        for r, a in zip(ranges, self.axes):
             if r is not None:
                 val = a.centered_bin_range_pair(*r)
                 if inclusive:
@@ -397,7 +379,9 @@ class Histogram:
         Find and return the bin location which contains the value 'x'. The
         number of values in x must equal the dimension of the histogram.
         """
-        return tuple(axis.bin_at(a) for axis, a in zip_longest(self._axes, x))
+        if len(self.axes) == 1:
+            return self.axes[0].bin_at(*x)
+        return tuple(axis.bin_at(a) for axis, a in zip_longest(self.axes, x))
 
     def getslice(self, *x):
         """
@@ -405,7 +389,7 @@ class Histogram:
         number of values in x must equal the dimension of the histogram.
         """
         get_slice = Histogram.Axis.getslice
-        return tuple(itt.starmap(get_slice, zip_longest(self._axes, x)))
+        return tuple(itt.starmap(get_slice, zip_longest(self.axes, x)))
 
     def value_at(self, x, y=0.0, z=0.0):
         """
@@ -447,8 +431,8 @@ class Histogram:
         ranges = []
         summed_axes = []
 
-        axes = self._axes
-        for i, axis in enumerate(self._axes):
+        axes = self.axes
+        for i, axis in enumerate(self.axes):
             if i == axis_idx:
                 ranges.append(axis.getslice(bounds))
             else:
@@ -471,7 +455,7 @@ class Histogram:
         bounds = itt.chain(axis_ranges, itt.repeat(slice(None)))
         ranges = []
         summed_axes = []
-        for i, axis in enumerate(self._axes):
+        for i, axis in enumerate(self.axes):
             if i == axis_x:
                 ranges.append(axis.getslice(bounds_x))
             elif i == axis_y:
@@ -788,8 +772,7 @@ class Histogram:
                 return self._centers
 
         def bin_at(self, value):
-            self._ptr
-            return self._ptr.FindBin(value)
+            return self.getbin(value)
 
         def getbin(self, value):
             """
