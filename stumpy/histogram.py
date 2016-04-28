@@ -9,11 +9,11 @@ import numpy as np
 
 import re
 import functools
-from decimal import Underflow, Overflow
+from copy import copy
 import operator as op
 import itertools as itt
 from itertools import zip_longest
-from copy import copy
+from decimal import Underflow, Overflow
 from stumpy.utils import ROOT_TO_NUMPY_DTYPE
 
 
@@ -115,6 +115,8 @@ class Histogram:
         overflow : np.ndarray
             Pairs of arrays describing the underflow/overflow bins of the
             histogram.
+        title : str
+            Title to be displayed above the plot
 
         Raises
         ------
@@ -130,6 +132,7 @@ class Histogram:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
         self.data = data
+        self.title = kwargs.pop('title', '')
         self._errors = errors
         return self
 
@@ -289,7 +292,8 @@ class Histogram:
             return self.data[val]
         elif isinstance(val, tuple):
             # bins = tuple(axis.getbin(v) for v, axis in zip(val, self.axes))
-            bins = tuple(functools.starmap(op.getitem, zip(val, self.axes)))
+            bins = tuple(axis[v] for axis, v in zip(self.axes, val))
+                #itt.starmap(op.getitem, zip(self.axes, val)))
             return self.data[bins]
         else:
             return self.data[self.axes[0].getbin(val)]
@@ -662,11 +666,13 @@ class Histogram:
                 Array of 'center' values - conflicts with low_edges, high_edges
             high_edges : np.array
                 Array of 'high' edges - conflicts with low_edges, centers
-
+            title : str
+                Optional title for the axis
             count_min_max : tuple
                 Tuple containing the number of bins, the low x value, and the
                 high x value.
             """
+            self.title = kwargs.pop('title', '')
             if sum(key in ('low_edges', 'centers', 'high_edges')
                    for key in kwargs.keys()) > 1:
                 raise ValueError("Axis can only be set from ONE of low_edges, "
@@ -693,7 +699,8 @@ class Histogram:
             elif isinstance(data, Histogram.Axis):
                 self._low_edges = data._low_edges
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
-                self.title = data.title
+                if not self.title:
+                    self.title = data.title
             else:
                 self._low_edges = data
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
@@ -853,9 +860,9 @@ class Histogram:
             of the data axis' data
             """
             if n is None:
-                return np.copy(self.data)
+                return np.copy(self._low_edges)
             else:
-                return np.linspace(n, self.data[0], self.data[-1])
+                return np.linspace(n, self._low_edges[0], self._low_edges[-1])
 
         def bounded_domain(self, value):
             """
