@@ -387,12 +387,12 @@ class Histogram:
             return self.axes[0].bin_at(*x)
         return tuple(axis.bin_at(a) for axis, a in zip_longest(self.axes, x))
 
-    def getslice(self, *x):
+    def get_slice(self, *x):
         """
         Find and return the bin location which contains the value 'x'. The
         number of values in x must equal the dimension of the histogram.
         """
-        get_slice = Histogram.Axis.getslice
+        get_slice = Histogram.Axis.get_slice
         return tuple(itt.starmap(get_slice, zip_longest(self.axes, x)))
 
     def value_at(self, x, y=0.0, z=0.0):
@@ -438,9 +438,9 @@ class Histogram:
         axes = self.axes
         for i, axis in enumerate(self.axes):
             if i == axis_idx:
-                ranges.append(axis.getslice(bounds))
+                ranges.append(axis.get_slice(bounds))
             else:
-                s = axis.getslice(next(bounds))
+                s = axis.get_slice(next(bounds))
                 ranges.append(s)
                 if isinstance(s, slice):
                     summed_axes.append(i)
@@ -461,11 +461,11 @@ class Histogram:
         summed_axes = []
         for i, axis in enumerate(self.axes):
             if i == axis_x:
-                ranges.append(axis.getslice(bounds_x))
+                ranges.append(axis.get_slice(bounds_x))
             elif i == axis_y:
-                ranges.append(axis.getslice(bounds_y))
+                ranges.append(axis.get_slice(bounds_y))
             else:
-                s = axis.getslice(next(bounds))
+                s = axis.get_slice(next(bounds))
                 ranges.append(s)
                 if isinstance(s, slice):
                     summed_axes.append(i)
@@ -803,7 +803,7 @@ class Histogram:
 
             return value
 
-        def getslice(self, value):
+        def get_slice(self, value):
             """
             Alias of getbin
             """
@@ -869,5 +869,5 @@ class Histogram:
             Return a numpy array containing the bin centers of the range that
             this axis' domain.
             """
-            s = self.getslice(value)
+            s = self.get_slice(value)
             return self.data[s]
