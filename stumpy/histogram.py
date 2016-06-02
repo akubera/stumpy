@@ -8,6 +8,7 @@ Histogram helper classes/methods.
 import numpy as np
 
 import re
+import uuid
 import functools
 from copy import copy
 import operator as op
@@ -304,18 +305,45 @@ class Histogram:
         """
         import ROOT
         hist_classname = 'TH%d%c' % (self.data.ndim, {
-                                        np.int64: 'I',
-                                        np.int32: 'I',
-                                        np.float32: 'F',
-                                        np.float64: 'D',
-                                     }[self.dtype])
+                                        np.dtype(np.int64): 'I',
+                                        np.dtype(np.int32): 'I',
+                                        np.dtype(np.float32): 'F',
+                                        np.dtype(np.float64): 'D',
+                                     }[self.data.dtype])
         hist_class = getattr(ROOT, hist_classname)
-        axis_info = np.array([(axis.nbins, axis.min, axis.max)
-            for axis in self.axes
-        ]).flatten()
+        if self.data.ndim == 1:
+            name = kwargs.pop('name', (self.name or ""))
+            title = kwargs.pop('title', (self.title or "<UNSET TITLE>"))
+            hist = hist_class(name,
+                              title,
+                              self.x_axis.nbins,
+                              self.x_axis.min,
+                              self.x_axis.max,)
+            for i, (d, e) in enumerate(zip(self.data, self.errors), 1):
+                hist.SetBinContent(i, d)
+                hist.SetBinError(i, e)
+        else:
+            axis_info = np.array([(axis.nbins, axis.min, axis.max)
+                for axis in self.axes
+            ]).flatten()
 
-        hist = hist_class(self.name, self.title, *axis_info)
+            hist = hist_class(self.name, self.title, *axis_info)
+
         return hist
+
+    def draw_nb_ROOT(self, **opts):
+        """
+        Creates and displays an ipython html element containing the JSROOT container of the
+        drawing.
+        """
+        from IPython.display import HTML, Javascript, display
+        div_uid = uuid.uuid1()
+        display(HTML("<div id='{id}'></div>".format(id=div_uid)))
+        display(Javascript("""require(["JSRoot"], function (ROOT) {
+            console.log('Drawing %s');
+            console.log("jsroot::", ROOT);
+            });
+        """ % div_uid))
 
     def find_bin(self, val):
         """
@@ -582,6 +610,10 @@ class Histogram:
             # quotient.Scale(1.0 / rhs)
             quotient.data /= rhs
             return quotient
+        elif isinstance(rhs, np.ndarray):
+            quotient = copy(self)
+            quotient /= rhs
+            return quotient
         else:
             raise TypeError("Cannot divide histogram by %r" % rhs)
 
@@ -598,6 +630,12 @@ class Histogram:
         elif isinstance(rhs, float):
             self.data /= rhs
             self._errors /= rhs
+
+        elif isinstance(rhs, np.ndarray):
+            assert np.shape(rhs) == np.shape(self.data), "%s != %s" % (np.shape(rhs), np.shape(self.data))
+            self.data /= rhs
+            self._errors /= rhs
+            return quotient
 
         return self
 
@@ -725,6 +763,15 @@ class Histogram:
             idx = np.searchsorted(self.data, value, side="left")
             rval, lval = array[idx - 1:idx + 1]
             return rval if fabs(value - rval) < fabs(value - lval) else lval
+
+        @property
+        def min(self):
+            return self._low_edges[0]
+
+        @property
+        def max(self):
+            return self._low_edges[-1] + self._bin_width
+
 
         @classmethod
         def BuildWithLinearSpacing(cls, nbins, min_x, max_x, **kwargs):
