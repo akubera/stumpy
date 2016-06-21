@@ -268,6 +268,8 @@ class Histogram:
                                            errors=np.copy(self.errors),
                                            axis=self.axes)
         the_copy.title = self.title
+        the_copy.underflow = self.underflow
+        the_copy.overflow = self.overflow
         return the_copy
 
     def __getitem__(self, val):
@@ -322,6 +324,8 @@ class Histogram:
             for i, (d, e) in enumerate(zip(self.data, self.errors), 1):
                 hist.SetBinContent(i, d)
                 hist.SetBinError(i, e)
+            # hist.SetOverflow(self.overflow)
+            # hist.SetUnderflow(self.underflow)
         else:
             axis_info = np.array([(axis.nbins, axis.min, axis.max)
                 for axis in self.axes
@@ -437,6 +441,13 @@ class Histogram:
         [] operator with a tuple of integers.
         """
         return self.data[i]
+
+    def copy_data_with_overflow(self):
+        result = np.hstack([[self.underflow],
+                             self.data,
+                             [self.overflow],
+                            ])
+        return np.ascontiguousarray(result)
 
     def project_1d(self, axis_idx, *axis_ranges, bounds=(None, None)):
         """
@@ -635,9 +646,26 @@ class Histogram:
             assert np.shape(rhs) == np.shape(self.data), "%s != %s" % (np.shape(rhs), np.shape(self.data))
             self.data /= rhs
             self._errors /= rhs
-            return quotient
 
         return self
+
+    def __matmul__(self, rhs):
+        """
+        Matrix multiplication
+        """
+        res = copy(self)
+        # res.data = lhs @ self.data
+        np.matmul(self.data, lhs, out=res.data)
+        return res
+
+    def __rmatmul__(self, lhs):
+        """
+        Right hand side matrix multiplication
+        """
+        res = copy(self)
+        # res.data = lhs @ self.data
+        np.matmul(lhs, self.data, out=res.data)
+        return res
 
     def triple_at(self, index):
         """
@@ -711,6 +739,10 @@ class Histogram:
                 high x value.
             """
             self.title = kwargs.pop('title', '')
+
+            if data.__class__.__name__ == 'TH1D':
+                raise TypeError("Cannot construct Axis from ROOT TAxis object. Use "
+                                "class method 'BuildFromRootAxis'.")
             if sum(key in ('low_edges', 'centers', 'high_edges')
                    for key in kwargs.keys()) > 1:
                 raise ValueError("Axis can only be set from ONE of low_edges, "
@@ -742,9 +774,13 @@ class Histogram:
             else:
                 self._low_edges = data
                 self._bin_width = self._low_edges[1] - self._low_edges[0]
-            self._xmin = self._low_edges[0]
-            self._xmax = self._low_edges[-1] + self._bin_width
 
+            self._xmin = self._low_edges[0]
+            try:
+                self._xmax = self._low_edges[-1] + self._bin_width
+            except IndexError:
+                print(':-(', self._low_edges)
+                raise
             return
             if not self._ptr.IsVariableBinSize():
                 maxbin = self._ptr.GetNbins() + 1
