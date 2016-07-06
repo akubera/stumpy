@@ -10,9 +10,10 @@ import numpy as np
 import re
 import uuid
 import functools
-from copy import copy
 import operator as op
 import itertools as itt
+
+from copy import copy
 from itertools import zip_longest
 from decimal import Underflow, Overflow
 from stumpy.utils import ROOT_TO_NUMPY_DTYPE
@@ -25,6 +26,7 @@ class Histogram:
     structures.
     """
 
+    # not used
     DEFAULT_AXIS_DATATYPE = 'low_edge'
 
     def __init__(self, *axis_parameters, name=None, **kwargs):
@@ -294,12 +296,15 @@ class Histogram:
         if isinstance(val, int):
             return self.data[val]
         elif isinstance(val, tuple):
-            # bins = tuple(axis.getbin(v) for v, axis in zip(val, self.axes))
-            bins = tuple(axis[v] for axis, v in zip(self.axes, val))
-                #itt.starmap(op.getitem, zip(self.axes, val)))
-            return self.data[bins]
+            return self.data[self.bin_ranges(*val)]
         else:
-            return self.data[self.axes[0].getbin(val)]
+            i = self.axes[0].getbin(val)
+            if i == Underflow:
+                return self.underflow
+            elif i == Overflow:
+                return self.overflow
+            else:
+                return self.data[i]
 
     def AsRootHist(self, **kwargs):
         """
@@ -740,8 +745,8 @@ class Histogram:
             """
             self.title = kwargs.pop('title', '')
 
-            if data.__class__.__name__ == 'TH1D':
-                raise TypeError("Cannot construct Axis from ROOT TAxis object. Use "
+            if data.__class__.__name__.startswith(('TH', 'TAxis')):
+                raise TypeError("Cannot construct Axis from ROOT object. Use "
                                 "class method 'BuildFromRootAxis'.")
             if sum(key in ('low_edges', 'centers', 'high_edges')
                    for key in kwargs.keys()) > 1:
@@ -866,18 +871,20 @@ class Histogram:
 
         def getbin(self, value):
             """
-            Return the bin relating to value
+            Return the bin relating to value. Bin counting starts at 0.
             """
             if isinstance(value, float):
-                idx = np.searchsorted(self._low_edges, value)
-                if idx == 0:
+                if value < self._xmin:
                     return Underflow
-                elif idx >= len(self._low_edges):
+                elif value >= self._xmax:
                     return Overflow
                 else:
+                    idx = np.searchsorted(self._low_edges, value, side='right') - 1
                     return idx
             if isinstance(value, slice):
-                return slice(*map(self.getbin, (value.start, value.stop)))
+                start = self.getbin(value.start)
+                stop = self.getbin(value.stop)
+                return slice(start, stop)
             if isinstance(value, (tuple, list)):
                 start, stop = map(self.getbin, value)
                 if isinstance(stop, int):
