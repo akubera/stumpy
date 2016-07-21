@@ -7,7 +7,6 @@ Histogram helper classes/methods.
 
 import numpy as np
 
-import re
 import uuid
 import functools
 import operator as op
@@ -16,7 +15,7 @@ import itertools as itt
 from copy import copy
 from itertools import zip_longest
 from decimal import Underflow, Overflow
-from stumpy.utils import ROOT_TO_NUMPY_DTYPE
+from stumpy.utils import root_histogram_datatype
 
 
 class Histogram:
@@ -135,56 +134,105 @@ class Histogram:
             self.axes = tuple(Histogram.Axis(axis_data) for axis_data in axis)
         self.name = name
         self.data = data
+        self.underflow = 0.0
+        self.overflow = 0.0
         self.title = kwargs.pop('title', '')
         self._errors = errors
         return self
 
+
     @classmethod
-    def BuildFromRootHist(cls, hist):
+    def hist_data_to_array(cls, root_histogram, use_matrix_indexing=False):
+        """
+        Returns an array containing all data in the histogram.
+        Note: this uses coordinate indexing: hist[x, y, z] instead of
+        *matrix* indexing, [z, y, x], which may be expected.
+        A transpose will switch from one to the other.
+        Note: This returns ALL data stored in ROOT data buffer,
+        including overflow, not including errors.
+        """
         import ROOT
-        # typecheck
-        if not isinstance(hist, ROOT.TH1):
-            raise TypeError("Not a root histogram")
 
-        for next_class in hist.__class__.__mro__:
-            classname = next_class.__name__
-            m = re.search('TH[1-3](?P<root_type>[CSIFD])', classname)
-            if m:
-                dtype = ROOT_TO_NUMPY_DTYPE[m.group('root_type')]
-                break
-        else:
-            raise TypeError("Not a root histogram")
+        dtype = root_histogram_datatype(root_histogram)
 
-        if isinstance(hist, ROOT.TH3):
-            nbins = (hist.GetNbinsZ() + 2, hist.GetNbinsY() + 2, hist.GetNbinsX() + 2)
-            data = np.ndarray(shape=nbins, dtype=dtype, buffer=hist.GetArray()).T
+        if isinstance(root_histogram, ROOT.TH3):
+            shape = (root_histogram.GetNbinsZ() + 2,
+                     root_histogram.GetNbinsY() + 2,
+                     root_histogram.GetNbinsX() + 2)
+        elif isinstance(root_histogram, ROOT.TH2):
+            shape = (root_histogram.GetNbinsY() + 2, root_histogram.GetNbinsX() + 2)
+        elif isinstance(root_histogram, ROOT.TH1):
+            shape = root_histogram.GetNbinsX() + 2
+
+        data = np.ndarray(shape=shape, dtype=dtype, buffer=root_histogram.GetArray())
+
+        # transpose data to make coordinate-based-indexing
+        if not use_matrix_indexing:
+            data = data.T
+
+        return data
+
+    @staticmethod
+    def hist_errors_to_array(root_histogram):
+        """
+        Return the errors, following same convensions as
+        `hist_data_to_array`.
+        """
+        import ROOT
+        return np.array([0.0])
+
+    @classmethod
+    def hist_split_data_under_over(cls, root_histogram):
+        """
+        Returns the data in ROOT histogram, with the overflow and
+        underflow values separated.
+        """
+        import ROOT
+        data = cls.hist_data_to_array(root_histogram)
+        if isinstance(root_histogram, ROOT.TH3):
             underflow = data[0, :, :], data[:, 0, :], data[:, :, 0]
             overflow = data[-1, :, :], data[:, -1, :], data[:, :, -1]
             data = np.copy(data[1:-1, 1:-1, 1:-1])
-        elif isinstance(hist, ROOT.TH2):
-            nbins = (hist.GetNbinsY() + 2, hist.GetNbinsX() + 2)
-            data = np.ndarray(shape=nbins, dtype=dtype, buffer=hist.GetArray()).T
+        elif isinstance(root_histogram, ROOT.TH2):
             underflow = data[0, :], data[:, 0]
             overflow = data[-1, :], data[:, -1]
             data = np.copy(data[1:-1, 1:-1])
-        elif isinstance(hist, ROOT.TH1):
-            nbins = hist.GetNbinsX()
-            underflow = hist.GetBinContent(0)
-            overflow = hist.GetBinContent(nbins + 1)
-            buffer = hist.GetArray()
-            buff_array = np.frombuffer(buffer, dtype=dtype, count=nbins+2)
-            data = np.copy(buff_array[1:-1])
+        elif isinstance(root_histogram, ROOT.TH1):
+            underflow = data[0]
+            overflow = data[-1]
+            data = np.copy(data[1:-1])
+        else:
+            raise TypeError("Expected ROOT histogram")
+
+        return data, underflow, overflow
+
+    @classmethod
+    def BuildFromRootHist(cls, root_histogram):
+        import ROOT
+
+        if not isinstance(root_histogram, ROOT.TH1):
+            raise TypeError("Not a root histogram")
+
+        data, underflow, overflow = cls.hist_split_data_under_over(root_histogram)
 
         self = cls.__new__(cls)
         self.data = data
-        self.name = hist.GetName()
-        self.title = hist.GetTitle()
+        self.name = root_histogram.GetName()
+        self.title = root_histogram.GetTitle()
         self.overflow = overflow
         self.underflow = underflow
 
-        self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(hist)
+        self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(root_histogram)
         self._errors = None
         return self
+
+    def as_matrix(self):
+        """
+        Returns the data in matrix form, so data is addressed in [y, x]
+        or [j, i] mode instead of [x, y] mode. This ends up being a
+        simple transpose.
+        """
+        return self.data.T
 
     @property
     def errors(self):
@@ -246,7 +294,6 @@ class Histogram:
         this histogram, where the last value in data is the weight
 
         Or weight is NOT none, and data is an N dimension collection.
-
 
         """
         if weight is None:
@@ -603,9 +650,13 @@ class Histogram:
         if isinstance(rhs, (int, float)):
             self.data *= rhs
             self._errors *= rhs
-            return self
+        elif isinstance(rhs, np.ndarray):
+            self.data *= rhs
+            self._errors *= rhs
         else:
             raise TypeError("Unknown type:", type(rhs))
+
+        return self
 
     def __truediv__(self, rhs):
         """
@@ -620,18 +671,16 @@ class Histogram:
         if isinstance(rhs, Histogram):
             quotient = copy(self)
             quotient /= rhs
-            return quotient
         elif isinstance(rhs, float):
             quotient = copy(self)
             # quotient.Scale(1.0 / rhs)
             quotient.data /= rhs
-            return quotient
         elif isinstance(rhs, np.ndarray):
             quotient = copy(self)
             quotient /= rhs
-            return quotient
         else:
             raise TypeError("Cannot divide histogram by %r" % rhs)
+        return quotient
 
     def __itruediv__(self, rhs):
         """
@@ -642,16 +691,13 @@ class Histogram:
             num_e_sq, den_e_sq = self.errors ** 2, rhs.errors ** 2
             self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq) / den_sq
             self.data /= rhs.data
-
         elif isinstance(rhs, float):
             self.data /= rhs
             self._errors /= rhs
-
         elif isinstance(rhs, np.ndarray):
             assert np.shape(rhs) == np.shape(self.data), "%s != %s" % (np.shape(rhs), np.shape(self.data))
             self.data /= rhs
             self._errors /= rhs
-
         return self
 
     def __matmul__(self, rhs):

@@ -39,3 +39,14 @@ def get_root_object(obj, paths):
         return new_obj
     else:
         return get_root_object(new_obj, rest[0])
+
+
+def root_histogram_datatype(hist):
+    import re
+    for next_class in hist.__class__.__mro__:
+        classname = next_class.__name__
+        m = re.search('TH[1-3](?P<root_type>[CSIFD])', classname)
+        if m:
+            return ROOT_TO_NUMPY_DTYPE[m.group('root_type')]
+    else:
+        raise TypeError("Not a root histogram")
