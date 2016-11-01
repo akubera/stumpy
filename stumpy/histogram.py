@@ -210,6 +210,7 @@ class Histogram:
     def BuildFromRootHist(cls, root_histogram):
         import ROOT
 
+        # typecheck
         if not isinstance(root_histogram, ROOT.TH1):
             raise TypeError("Not a root histogram")
 
@@ -223,7 +224,13 @@ class Histogram:
         self.underflow = underflow
 
         self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(root_histogram)
-        self._errors = None
+
+        nX, nY, nZ = root_histogram.GetNbinsX(), root_histogram.GetNbinsY(), root_histogram.GetNbinsZ()
+        # self._errors = np.array([root_histogram.GetBinError(b)
+        #                          for b in range(1, nX * nY * nZ + 1)])
+        total_bin_ranges = range(1, nX * nY * nZ + 1)
+        error_iter = map(root_histogram.GetBinError, total_bin_ranges)
+        self._errors = np.fromiter(error_iter, float).reshape(nX, nY, nZ)
         return self
 
     def as_matrix(self):
@@ -343,7 +350,8 @@ class Histogram:
         if isinstance(val, int):
             return self.data[val]
         elif isinstance(val, tuple):
-            return self.data[self.bin_ranges(*val)]
+            ranges = self.bin_ranges(*val)
+            return self.data[ranges]
         else:
             i = self.axes[0].getbin(val)
             if i == Underflow:
@@ -1006,4 +1014,4 @@ class Histogram:
             this axis' domain.
             """
             s = self.get_slice(value)
-            return self.data[s]
+            return self.bin_centers[s]
