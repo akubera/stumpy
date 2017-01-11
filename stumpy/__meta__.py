@@ -16,4 +16,4 @@ copyright = "Copyright 2017, Andrew Kubera"
 
 url = "https://gitlab.cern.ch/akubera/stumpy"
 
-license = 'MIT'
+license = 'BSD'

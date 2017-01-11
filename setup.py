@@ -39,10 +39,11 @@ NAMESPACES = [
 CLASSIFIERS = [
     "Development Status :: 1 - Planning",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.5",
+    "Programming Language :: Python :: 3.6",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Visualization",
