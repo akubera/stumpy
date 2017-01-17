@@ -13,6 +13,8 @@ import operator as op
 import itertools as itt
 
 from copy import copy
+from operator import mul
+from functools import reduce
 from itertools import zip_longest
 from decimal import Underflow, Overflow
 from stumpy.utils import root_histogram_datatype
@@ -225,12 +227,13 @@ class Histogram:
 
         self.axes = Histogram.Axis.BuildAxisTupleFromRootHist(root_histogram)
 
-        nX, nY, nZ = root_histogram.GetNbinsX(), root_histogram.GetNbinsY(), root_histogram.GetNbinsZ()
-        # self._errors = np.array([root_histogram.GetBinError(b)
-        #                          for b in range(1, nX * nY * nZ + 1)])
-        total_bin_ranges = range(1, nX * nY * nZ + 1)
+        # nX, nY, nZ = root_histogram.GetNbinsX(), root_histogram.GetNbinsY(), root_histogram.GetNbinsZ()
+        # assert self.data.shape == (nX, nY, nZ)
+
+        total_bin_ranges = range(1, reduce(mul, data.shape, 1) + 1)
         error_iter = map(root_histogram.GetBinError, total_bin_ranges)
-        self._errors = np.fromiter(error_iter, float).reshape(nX, nY, nZ)
+        self._errors = np.fromiter(error_iter, float).reshape(self.data.shape)
+
         return self
 
     def as_matrix(self):
@@ -249,7 +252,11 @@ class Histogram:
 
     @errors.setter
     def errors(self, errs):
-        assert errs.shape == self.data.shape
+        if np.shape(errs) != self.data.shape:
+            raise TypeError("Unexpected shape of errors {} != {} (expected)".format(
+                np.shape(errors),
+                self.data.shape
+            ))
         self._errors = errs
 
     @property
@@ -287,10 +294,37 @@ class Histogram:
         data : iterable
             Data is an iterable returning N numbers, where N is dimension of
             histogram.
+
+        Returns
+        -------
+        None
         """
+        shape = np.shape(data)
+        dim = np.ndim(data)
+
+        # only a value - just send to fill
+        if dim == 0:
+            self.fill(data)
+        # 1D 'list' of values
+        elif dim == 1 and self.data.ndim == 1:
+            pass
+        elif dim == 1 and shape == self.data.ndim:
+            self
+        elif dim == 2 and shape[1] == self.data.ndim:
+            pass
+        elif shape[1:] != self.data.ndim:
+            raise ValueError(
+                "Array given to fill_all() does not have compatible "
+                "shape to fill the histogram: {received} != {expected}".format(
+                    received=shape[1:], expected=self.data.ndim))
+
+        dest = np.zeros(self.data.shape)
         for d in data:
             bins = tuple(a.getbin(d) for a, d in zip_longest(self.axes, data))
-            self.data[bins] += 1.0
+            dest[bins] += 1.0
+        self.data += dest
+        if self._errors:
+            pass
 
     def fillw(self, *data, weight=None):
         """
@@ -443,7 +477,7 @@ class Histogram:
             axis_range_pairs = zip(self.axes, ranges)
             domains = iter(axis.bounded_domain(r) for axis, r in axis_range_pairs)
 
-        return np.array([l for l in itt.product(*domains)])
+        return np.fromiter(itt.product(*domains), np.float32)
 
     def bin_ranges(self, *ranges):
         """
@@ -697,8 +731,12 @@ class Histogram:
         if isinstance(rhs, Histogram):
             num_sq, den_sq = self.data ** 2, rhs.data ** 2
             num_e_sq, den_e_sq = self.errors ** 2, rhs.errors ** 2
-            self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq) / den_sq
-            self.data /= rhs.data
+            self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                np.floor_divide(self._errors, den_sq, out=self._errors)
+                self._errors[np.isfinite(self._errors) != True] = 0
+                self.data /= rhs.data
+                self.data[np.isfinite(self.data) != True] = 0
         elif isinstance(rhs, float):
             self.data /= rhs
             self._errors /= rhs
