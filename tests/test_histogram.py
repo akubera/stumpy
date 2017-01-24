@@ -1,5 +1,5 @@
 #
-# test/histogram.py
+# test/test_histogram.py
 #
 
 import pytest

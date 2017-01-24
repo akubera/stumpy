@@ -1,19 +1,21 @@
 #
-# test/histogram.py
+# tests/test_axis.py
 #
 
 import pytest
 import numpy as np
 
 from itertools import zip_longest
-from decimal import Underflow, Overflow
-from stumpy.histogram import Histogram
-
-Axis = Histogram.Axis
+from stumpy.axis import Axis, Overflow, Underflow
 
 
-def test_axis_constructor():
-    pass
+@pytest.fixture
+def axis():
+    return Axis((40, 0, 1))
+
+
+def test_axis_fixture(axis):
+    assert isinstance(axis, Axis)
 
 
 def test_constructor_linear_spacing():
