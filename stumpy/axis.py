@@ -97,7 +97,7 @@ class Axis:
         return self
 
     @classmethod
-    def BuildFromROOTAxis(cls, axis):
+    def FromROOTAxis(cls, axis):
         nbins = axis.GetNbins()
         if axis.IsVariableBinSize():
             bin_array = np.frombuffer(axis.GetXbins(), dtype='f8', count=nbins)
@@ -108,16 +108,6 @@ class Axis:
                                               axis.GetXmax())
         self.title = axis.GetTitle()
         return self
-
-    @classmethod
-    def BuildAxisTupleFromRootHist(cls, hist):
-        """
-        Returns tuple of 3 Axis objects, corresponding to the x,y,z axes of
-        the hist argument
-        """
-        hist_axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
-        axes = hist_axes[:hist.GetDimension()]
-        return tuple(map(cls.BuildFromROOTAxis, axes))
 
     #
     # Properties
@@ -257,7 +247,39 @@ class Axis:
         return self.bin_centers[s]
 
 
-class MultiAxis(Axis):
+class MultiAxis(tuple, Axis):
     """
     Pseudo-axis used for multiple dimension data.
     """
+
+    @classmethod
+    def FromRootHistogram(cls, hist):
+        """
+        Create a MultiAxis object from axes found in a ROOT histogram
+        """
+        from ROOT import TH1
+        if not isinstance(hist, TH1):
+            raise TypeError("Expected ROOT histogram, found %r " % hist)
+
+        hist_axes = (hist.GetXaxis(), hist.GetYaxis(), hist.GetZaxis())
+        axes = tuple(map(Axis.FromROOTAxis, hist_axes[:hist.GetDimension()]))
+
+        self = cls.__new__(cls, axes)
+
+        return self
+
+    def __getitem__(self, key):
+        return self.axis(key)
+
+    def axis(self, name):
+        if not isinstance(name, int):
+            name = self.axis_choice(name)
+        return self._axis[name]
+
+    @staticmethod
+    def axis_choice(name):
+        return {
+            'X': 1,
+            'Y': 2,
+            'Z': 3,
+        }.get(name, 0)
