@@ -3,14 +3,20 @@
 #
 
 import pytest
-import numpy as np
 import itertools
+import numpy as np
 from stumpy.histogram import Histogram
 
 
 @pytest.fixture
 def ROOT():
     return pytest.importorskip("ROOT")
+
+
+@pytest.fixture(scope="module",
+                params=[True, False])
+def use_sumw2(request):
+    return request.param
 
 
 @pytest.fixture
@@ -30,11 +36,13 @@ def h1f(ROOT, rnd_seed):
 
 
 @pytest.fixture
-def h2f(ROOT, rnd_seed):
+def h2f(ROOT, rnd_seed, use_sumw2):
     np.random.seed(rnd_seed)
     h2 = ROOT.TH2F("h2f", "hist title",
                    100, 0.0, 1.0,
                    70, 0.0, 1.0)
+    if use_sumw2:
+        h2.Sumw2()
     for x, y in np.random.random((5000, 2)):
         h2.Fill(x, y)
 
@@ -180,11 +188,72 @@ def test_histogram_constructor_ROOT_TH3(h3f):
         assert h3f.GetBinContent(i, j, 0) == hist.underflow[2][i, j]
         assert h3f.GetBinContent(i, j, 14) == hist.overflow[2][i, j]
 
-    for x, xs in enumerate(hist.data):
-        for y, ys in enumerate(xs):
-            for z, v in enumerate(ys):
-                assert v == h3f.GetBinContent(x + 1, y + 1, z + 1)
+    for x, (xs, exs) in enumerate(zip(hist.data, hist.errors)):
+        for y, (ys, eys) in enumerate(zip(xs, exs)):
+            for z, (v, e) in enumerate(zip(ys, eys)):
+                i = (x + 1, y + 1, z + 1)
+                binval = h3f.GetBinContent(*i)
+                binerr = h3f.GetBinError(*i)
+                assert v == binval
+                # assert np.isclose(e, np.sqrt(v))
+                # assert np.isclose(e, binerr)
+
     h3f.Delete()
+
+def test_histogram_sets_errors_1d(use_sumw2):
+    from ROOT import TH1F
+    h = TH1F("h3d", "TEST", 100, 0, 1)
+    if use_sumw2:
+        h.Sumw2()
+    for x in np.random.random(10000):
+        h.Fill(x)
+
+    hist = Histogram.BuildFromRootHist(h)
+    for i, (x, e) in enumerate(zip(hist.data, hist.errors)):
+        assert x == h.GetBinContent(i + 1)
+        assert e == h.GetBinError(i + 1)
+        assert np.isclose(e, np.sqrt(x))
+
+
+def test_histogram_sets_errors_2d(use_sumw2):
+    from ROOT import TH2F
+    h = TH2F("h3d", "TEST", 7, 0, 1, 3, 0, 1)
+    if use_sumw2:
+        h.Sumw2()
+    for x, y in np.random.random((1000, 2)):
+        h.Fill(x * 2, y)
+
+    hist = Histogram.BuildFromRootHist(h)
+    for i, j, (v, e) in enumerate_2d(hist.data, hist.errors):
+        assert v == h.GetBinContent(i + 1, j + 1)
+        assert e == h.GetBinError(i + 1, j + 1)
+        assert np.isclose(e, np.sqrt(v))
+
+
+def test_histogram_sets_errors_3d(use_sumw2):
+    from ROOT import TH3F
+    h = TH3F("h3d", "TEST", 7, 0, 1, 3, 0, 1, 5, 0, 1)
+    if use_sumw2:
+        h.Sumw2()
+    for x, y, z in np.random.random((1000, 3)):
+        h.Fill(x, y, z)
+
+    hist = Histogram.BuildFromRootHist(h)
+    for i, j, k, (v, e) in enumerate_3d(hist.data, hist.errors):
+        assert v == h.GetBinContent(i + 1, j + 1, k + 1)
+        assert e == h.GetBinError(i + 1, j + 1, k + 1)
+        assert np.isclose(e, np.sqrt(v))
+
+
+def enumerate_2d(*args):
+    for i, a, in enumerate(zip(*args)):
+        for j, b in enumerate(zip(*a)):
+            yield i, j, b
+
+def enumerate_3d(*args):
+    for i, j, a in enumerate_2d(*args):
+        for k, b in enumerate(zip(*a)):
+            yield i, j, k, b
 
 
 def test_histogram_constructor():

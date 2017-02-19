@@ -21,6 +21,22 @@ from stumpy.utils import root_histogram_datatype
 from .axis import Axis, MultiAxis, Overflow, Underflow
 
 
+def root_histogram_shape(root_hist, use_matrix_indexing=True):
+    """
+    Return a tuple corresponding to the shape of the histogram.
+    If use_matrix_indexing is true, the tuple is in 'reversed' zyx
+    order. Matrix-order is the layout used in the internal buffer
+    of the root histogram - keep True if reshaping the array).
+    """
+    dim = root_hist.GetDimension()
+    shape = np.array([root_hist.GetNbinsZ(),
+                        root_hist.GetNbinsY(),
+                        root_hist.GetNbinsX()][3-dim:]) + 2
+    if not use_matrix_indexing:
+        shape = reversed(shape)
+    return tuple(shape)
+
+
 class Histogram:
     """
     A class imitating the TH[1-3]D root histograms using numpy data structures.
@@ -143,9 +159,8 @@ class Histogram:
         self._errors = errors
         return self
 
-
-    @classmethod
-    def hist_data_to_array(cls, root_histogram, use_matrix_indexing=False):
+    @staticmethod
+    def hist_data_to_array(root_hist, use_matrix_indexing=False):
         """
         Returns an array containing all data in the histogram.
         Note: this uses coordinate indexing: hist[x, y, z] instead of
@@ -153,87 +168,109 @@ class Histogram:
         A transpose will switch from one to the other.
         Note: This returns ALL data stored in ROOT data buffer,
         including overflow, not including errors.
+
+        Parameters
+        ----------
+        root_hist : (TH1|TH2|TH3)
+            ROOT histogram type of 1-3 dimension
+        use_matrix_indexing : bool
+            If true, data is returned in matrix-indexed form, where
+            the most significant index (i.e. the leftmost) is 'z'; otherwise returns
+            histogram in coordinate form, where most significant
+            index is 'x'.
+
         """
-        import ROOT
-
-        dtype = root_histogram_datatype(root_histogram)
-
-        if isinstance(root_histogram, ROOT.TH3):
-            shape = (root_histogram.GetNbinsZ() + 2,
-                     root_histogram.GetNbinsY() + 2,
-                     root_histogram.GetNbinsX() + 2)
-        elif isinstance(root_histogram, ROOT.TH2):
-            shape = (root_histogram.GetNbinsY() + 2, root_histogram.GetNbinsX() + 2)
-        elif isinstance(root_histogram, ROOT.TH1):
-            shape = root_histogram.GetNbinsX() + 2
-
-        data = np.ndarray(shape=shape, dtype=dtype, buffer=root_histogram.GetArray())
+        data = np.ndarray(shape=root_histogram_shape(root_hist),
+                          dtype=root_histogram_datatype(root_hist),
+                          buffer=root_hist.GetArray())
 
         # transpose data to make coordinate-based-indexing
         if not use_matrix_indexing:
             data = data.T
-
         return data
 
     @staticmethod
-    def hist_errors_to_array(root_histogram):
+    def hist_errors_to_array(root_hist, use_matrix_indexing=False):
         """
         Return the errors, following same convensions as
         `hist_data_to_array`.
         """
-        import ROOT
-        return np.array([0.0])
+        dtype = np.double
+        shape = root_histogram_shape(root_hist)
+        err_buffer = root_hist.GetSumw2()
 
-    @classmethod
-    def hist_split_data_under_over(cls, root_histogram):
+        # If histogram has precalculated errors, just copy the buffer
+        if err_buffer.GetSize() != 0:
+            sumw2 = np.ndarray(shape=shape,
+                               dtype=dtype,
+                               buffer=err_buffer.GetArray())
+            errs = np.sqrt(np.copy(sumw2))
+        else:
+            err_it = map(root_hist.GetBinError, range(reduce(mul, shape, 1)))
+            errs = np.fromiter(err_it, dtype=dtype).reshape(shape)
+
+        # transpose data to make coordinate-based-indexing
+        if not use_matrix_indexing:
+            errs = errs.T
+        return errs
+
+    @staticmethod
+    def split_underflow_and_overflow_from(data):
         """
-        Returns the data in ROOT histogram, with the overflow and
-        underflow values separated.
+        Splits the bins pertaining to overflow/underflow from some
+        multi-dimentional array.
+
+        The data is copied.
         """
-        import ROOT
-        data = cls.hist_data_to_array(root_histogram)
-        if isinstance(root_histogram, ROOT.TH3):
-            underflow = data[0, :, :], data[:, 0, :], data[:, :, 0]
-            overflow = data[-1, :, :], data[:, -1, :], data[:, :, -1]
-            data = np.copy(data[1:-1, 1:-1, 1:-1])
-        elif isinstance(root_histogram, ROOT.TH2):
-            underflow = data[0, :], data[:, 0]
-            overflow = data[-1, :], data[:, -1]
-            data = np.copy(data[1:-1, 1:-1])
-        elif isinstance(root_histogram, ROOT.TH1):
+        if data.ndim == 1:
             underflow = data[0]
             overflow = data[-1]
             data = np.copy(data[1:-1])
+        elif data.ndim == 2:
+            underflow = data[0, :], data[:, 0]
+            overflow = data[-1, :], data[:, -1]
+            data = np.copy(data[1:-1, 1:-1])
+        elif data.ndim == 3:
+            underflow = data[0, :, :], data[:, 0, :], data[:, :, 0]
+            overflow = data[-1, :, :], data[:, -1, :], data[:, :, -1]
+            data = np.copy(data[1:-1, 1:-1, 1:-1])
         else:
-            raise TypeError("Expected ROOT histogram")
-
+            raise RuntimeError("Unexpected dimension %d of histogram data" % data.ndim)
         return data, underflow, overflow
 
     @classmethod
-    def BuildFromRootHist(cls, root_histogram):
-        import ROOT
+    def BuildFromRootHist(cls, root_hist):
+        """
+        Construct a stumpy Histogram object out of a standard ROOT
+        Histogram TH1, TH2, TH3 of any type.
 
-        # typecheck
-        if not isinstance(root_histogram, ROOT.TH1):
-            raise TypeError("Not a root histogram")
+        Parameters
+        ----------
+        root_hist : ROOT.(TH1|TH2|TH3)
+            The ROOT histogram containing the data
+        """
 
-        data, underflow, overflow = cls.hist_split_data_under_over(root_histogram)
+        # copy histogram data into numpy arrays
+        root_data = cls.hist_data_to_array(root_hist)
+        root_errors = cls.hist_errors_to_array(root_hist)
 
+        # create new Histogram object
         self = cls.__new__(cls)
-        self.data = data
-        self.name = root_histogram.GetName()
-        self.title = root_histogram.GetTitle()
-        self.overflow = overflow
-        self.underflow = underflow
 
-        self.axes = Axis.BuildAxisTupleFromRootHist(root_histogram)
+        # split bins from overflow/underflow
+        self.data, self.underflow, self.overflow = \
+            cls.split_underflow_and_overflow_from(root_data)
 
-        # nX, nY, nZ = root_histogram.GetNbinsX(), root_histogram.GetNbinsY(), root_histogram.GetNbinsZ()
-        # assert self.data.shape == (nX, nY, nZ)
+        self._errors, *_ = \
+            cls.split_underflow_and_overflow_from(root_errors)
 
-        total_bin_ranges = range(1, reduce(mul, data.shape, 1) + 1)
-        error_iter = map(root_histogram.GetBinError, total_bin_ranges)
-        self._errors = np.fromiter(error_iter, float).reshape(self.data.shape)
+        self.name = root_hist.GetName()
+        self.title = root_hist.GetTitle()
+
+        self.axes = MultiAxis.FromRootHistogram(root_hist)
+
+        assert self.data.shape == self._errors.shape, 'data/error shape mismatch '\
+            '(%s ≠ %s)' % (self.data.shape, self._errors.shape)
 
         return self
 
@@ -682,7 +719,7 @@ class Histogram:
             self.data *= rhs
             self._errors *= rhs
         else:
-            raise TypeError("Unknown type:", type(rhs))
+            return NotImplemented
 
         return self
 
@@ -707,7 +744,7 @@ class Histogram:
             quotient = copy(self)
             quotient /= rhs
         else:
-            raise TypeError("Cannot divide histogram by %r" % rhs)
+            return NotImplemented
         return quotient
 
     def __itruediv__(self, rhs):
@@ -730,6 +767,9 @@ class Histogram:
             assert np.shape(rhs) == np.shape(self.data), "%s != %s" % (np.shape(rhs), np.shape(self.data))
             self.data /= rhs
             self._errors /= rhs
+        else:
+            return NotImplemented
+
         return self
 
     def __matmul__(self, rhs):
