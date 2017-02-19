@@ -444,21 +444,6 @@ class Histogram:
             });
         """ % div_uid))
 
-    def find_bin(self, val):
-        """
-
-        Return the bin number, or tuple, which contains the value val. If the
-        bin falls  outside the range of this histogram, this will return either
-        a Underflow or Overflow instance.
-
-        Parameters
-        ----------
-        val : float or tuple of floats
-            The value to look for in each axis.
-        """
-        def searchsorted(self, value, side, sorter):
-            return self.data.searchsorted(value, side, sorter)
-
     def domain(self, *ranges):
         if ranges is ():
             domains = iter(axis.domain() for axis in self.axes)
@@ -734,7 +719,7 @@ class Histogram:
             num_e_sq, den_e_sq = self.errors ** 2, rhs.errors ** 2
             self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq)
             with np.errstate(divide='ignore', invalid='ignore'):
-                np.floor_divide(self._errors, den_sq, out=self._errors)
+                np.divide(self._errors, den_sq, out=self._errors)
                 self._errors[np.isfinite(self._errors) != True] = 0
                 self.data /= rhs.data
                 self.data[np.isfinite(self.data) != True] = 0
