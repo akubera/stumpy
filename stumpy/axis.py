@@ -109,6 +109,24 @@ class Axis:
         self.title = axis.GetTitle()
         return self
 
+    def sliced_by(self, slice_):
+        """
+        Create axis with a slice applied to the data (_low_edges)
+        """
+        slice_ = self.get_slice(slice_)
+        axis = self.masked_by(slice_)
+        return axis
+
+    def masked_by(self, mask):
+        """
+        Create axis with a masked applied to the data (_low_edges)
+        """
+        axis = self.__new__(self.__class__)
+        axis._low_edges = self._low_edges[mask]
+        axis._bin_width = axis._low_edges[1] - axis._low_edges[0]
+        axis.title = self.title
+        return axis
+
     #
     # Properties
     #
@@ -139,6 +157,10 @@ class Axis:
         except AttributeError:
             self._centers = self._low_edges + self._bin_width / 2.0
             return self._centers
+
+    @property
+    def shape(self):
+        return np.shape(self._low_edges)
 
     #
     # Data access
@@ -246,6 +268,14 @@ class Axis:
         s = self.get_slice(value)
         return self.bin_centers[s]
 
+    def __eq__(self, rhs):
+        if isinstance(rhs, Axis):
+            return np.all(self._low_edges == rhs._low_edges)
+        return NotImplemented
+
+    def __len__(self):
+        return len(self._low_edges)
+
 
 class MultiAxis(tuple, Axis):
     """
@@ -268,13 +298,33 @@ class MultiAxis(tuple, Axis):
 
         return self
 
+    def sliced_by(self, slice_):
+        """
+        Construct new MultiAxis using sliced versions of associated axes.
+        """
+        cls = self.__class__
+        multiaxis = cls.__new__(cls, tuple(a.sliced_by(slice_) for a in self))
+        return multiaxis
+
+    def masked_by(self, mask):
+        """
+        Construct new MultiAxis using masked versions of associated axes.
+        """
+        cls = self.__class__
+        multiaxis = cls.__new__(cls, tuple(a.masked_by(mask) for a in self))
+        return multiaxis
+
+    @property
+    def shape(self):
+        return tuple(len(a) for a in self)
+
     def __getitem__(self, key):
         return self.axis(key)
 
     def axis(self, name):
         if not isinstance(name, int):
             name = self.axis_choice(name)
-        return self._axis[name]
+        return super().__getitem__(name)
 
     @staticmethod
     def axis_choice(name):

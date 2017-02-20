@@ -50,3 +50,4 @@ def root_histogram_datatype(hist):
             return ROOT_TO_NUMPY_DTYPE[m.group('root_type')]
     else:
         raise TypeError("Not a root histogram")
+

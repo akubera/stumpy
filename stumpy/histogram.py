@@ -16,7 +16,7 @@ from copy import copy
 from operator import mul
 from functools import reduce
 from itertools import zip_longest
-from stumpy.utils import root_histogram_datatype
+from .utils import root_histogram_datatype, get_root_object
 
 from .axis import Axis, MultiAxis, Overflow, Underflow
 
@@ -274,6 +274,40 @@ class Histogram:
 
         return self
 
+    def apply_mask(self, mask):
+        """
+        Return new histogram with mask applied to data/errors/axis
+        """
+        masked_hist = self.__new__(self.__class__)
+        masked_hist.name = self.name
+        masked_hist.title = self.title
+        masked_hist.data = self.data[mask]
+        try:
+            masked_hist._errors = self._errors[mask]
+        except AttributeError:
+            masked_hist._errors = None
+
+        masked_hist.axes = self.axes.masked_by(mask)
+        return masked_hist
+
+    def apply_slice(self, *slice_):
+        """
+        Return new histogram with sliced data/errors/axis
+        """
+        slice_ = self.axes[0].get_slice(*slice_)
+        masked_hist = self.__new__(self.__class__)
+        masked_hist.name = self.name
+        masked_hist.title = self.title
+        masked_hist.data = self.data[slice_]
+        try:
+            masked_hist._errors = self._errors[slice_]
+        except AttributeError:
+            masked_hist._errors = None
+
+        masked_hist.axes = self.axes.masked_by(slice_)
+        assert masked_hist.shape == masked_hist.axes.shape
+        return masked_hist
+
     def as_matrix(self):
         """
         Returns the data in matrix form, so data is addressed in [y, x]
@@ -419,7 +453,8 @@ class Histogram:
         # get numpy array of values between 0.5 and 1.0 - inclusive
         hist2d[0.5:1.0]
         """
-        if isinstance(val, int):
+        is_mask = isinstance(val, np.ndarray) and val.dtype == np.bool
+        if isinstance(val, int) or is_mask:
             return self.data[val]
         elif isinstance(val, tuple):
             ranges = self.bin_ranges(*val)
@@ -830,3 +865,74 @@ class Histogram:
         the axis tuple.
         """
         return self.axes[idx]
+
+
+class HistogramRatioPair:
+    """
+    A numerator-denominator pair of histograms.
+    """
+
+    def __init__(self, num, den):
+        assert num.axes == den.axes
+        self.numerator = num
+        self.denominator = den
+        self.axes = num.axes
+        self._ratio = None
+
+    @classmethod
+    def WithKeysInRootObject(cls, container, num_key, den_key):
+        keys = (num_key, den_key)
+        objs = (get_root_object(container, key) for key in keys)
+        n, d = map(Histogram.BuildFromRootHist, objs)
+        return cls(n, d)
+
+    def with_masked_domain(self, *domain):
+        """
+        Return a HistogramRatioPair with the domain.
+        """
+        num, den = self.pair
+        domain_slice = self.axes[0].get_slice(*domain)
+
+        result = self.__new__(self.__class__)
+        n = result.numerator = num.apply_slice(*domain)
+        assert n.x_axis.shape == n.data.shape
+        result.denominator = den.apply_slice(*domain)
+        result.axes = self.axes.sliced_by(domain_slice)
+        assert result.axes[0].shape == result.numerator.data.shape, "%s" % ((result.axes[0].shape , num.x_axis.shape), )
+        result._ratio = None
+        return result
+
+    def with_masked_zeros(self):
+        """
+        Return a HistogramRatioPair with the domain.
+        """
+
+        num, den = self.pair
+        mask_zeros = (num.data != 0.0) & (den.data != 0.0)
+        if np.all(mask_zeros):
+            return self
+        result = self.__new__(self.__class__)
+        result.numerator = num.apply_mask(mask_zeros)
+        result.denominator = den.apply_mask(mask_zeros)
+        result.axes = self.axes.masked_by(mask_zeros)
+        assert result.axes[0].shape == result.numerator.x_axis.shape
+        result._ratio = None
+        return result
+
+    @property
+    def pair(self):
+        return self.numerator, self.denominator
+
+    @property
+    def ratio(self):
+        """
+        The ratio of the two histograms
+        """
+        if self._ratio is None:
+            self._raito = self.numerator / self.denominator
+        return self._ratio
+
+    @property
+    def shape(self):
+        return self.axes.shape
+
