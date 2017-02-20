@@ -6,9 +6,20 @@ Submodule containing the Axis, BinnedAxis, and AxisCollection classes.
 """
 
 import numpy as np
+from itertools import zip_longest as _zip_longest
+from enum import Enum
 
 Overflow = type("OVERFLOW", (), {})()
 Underflow = type("UNDERFLOW", (), {})()
+
+class ByEdge(Enum):
+    High = 0
+    Low = 1
+    Center = 2
+
+    @classmethod
+    def From(self, name):
+        ...
 
 
 class Axis:
@@ -114,6 +125,7 @@ class Axis:
         Create axis with a slice applied to the data (_low_edges)
         """
         slice_ = self.get_slice(slice_)
+        print(">>>", slice_)
         axis = self.masked_by(slice_)
         return axis
 
@@ -296,27 +308,74 @@ class MultiAxis(tuple, Axis):
 
         self = cls.__new__(cls, axes)
 
+        self._axes = self
         return self
 
-    def sliced_by(self, slice_):
+    def get_bin(self, value):
+        if len(value) != len(self._axes):
+            raise ValueError("Dimension of value does not equal dimension of axes! "\
+                "(%d > %d)" % (len(slices), len(self._axes)))
+        return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
+
+
+    def get_slice(self, *slices):
+        if len(slices) > len(self._axes):
+            raise RuntimeError("More slices than axes! "\
+                "(%d > %d)" % (len(slices), len(self._axes)))
+        return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
+
+
+    def sliced_by(self, *slices):
         """
         Construct new MultiAxis using sliced versions of associated axes.
         """
         cls = self.__class__
-        multiaxis = cls.__new__(cls, tuple(a.sliced_by(slice_) for a in self))
+        print("[sliced_by]", slices)
+        if len(slices) > len(self._axes):
+            raise RuntimeError("More slices than axes! "\
+                "(%d > %d)" % (len(slices), len(self._axes)))
+
+        axes = tuple(a.sliced_by(s) for a, s in _zip_longest(self._axes, slices))
+        multiaxis = cls.__new__(cls, axes)
         return multiaxis
 
-    def masked_by(self, mask):
+    def masked_by(self, *masks):
         """
         Construct new MultiAxis using masked versions of associated axes.
         """
         cls = self.__class__
-        multiaxis = cls.__new__(cls, tuple(a.masked_by(mask) for a in self))
+        print("[masked_by]", masks)
+        axes = tuple(a.masked_by(m) for a, m in _zip_longest(self._axes, masks))
+        multiaxis = cls.__new__(cls, axes)
         return multiaxis
 
     @property
     def shape(self):
         return tuple(len(a) for a in self)
+
+    @property
+    def ndim(self):
+        return len(self._axes)
+
+    def meshgrid(self, point_at='center'):
+        """
+        Return numpy 'meshgrid' parameters created from all axes.
+
+        Parameters
+        ----------
+            point_at : string
+                identifier of
+        """
+        from operator import attrgetter
+        bins = {
+            'low': attrgetter('_low_edges'),
+            'center': attrgetter('bin_centers'),
+            'high': attrgetter('_high_edges'),
+        }[point_at]
+        return np.meshgrid(*map(bins, self._axes))
+
+    # def __iter__(self):
+    #     return super().__iter__()
 
     def __getitem__(self, key):
         return self.axis(key)

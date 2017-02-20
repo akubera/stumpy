@@ -274,38 +274,45 @@ class Histogram:
 
         return self
 
-    def apply_mask(self, mask):
+    def apply_mask(self, *masks):
         """
         Return new histogram with mask applied to data/errors/axis
         """
         masked_hist = self.__new__(self.__class__)
         masked_hist.name = self.name
         masked_hist.title = self.title
-        masked_hist.data = self.data[mask]
+        masked_hist.data = self.data[masks]
         try:
-            masked_hist._errors = self._errors[mask]
+            masked_hist._errors = self._errors[masks]
         except AttributeError:
             masked_hist._errors = None
 
-        masked_hist.axes = self.axes.masked_by(mask)
+        masked_hist.axes = self.axes.masked_by(*masks)
+        masked_hist.underflow = None
+        masked_hist.overflow = None
+        assert masked_hist.shape == masked_hist.axes.shape
         return masked_hist
 
-    def apply_slice(self, *slice_):
+    def apply_slice(self, *slices):
         """
         Return new histogram with sliced data/errors/axis
         """
-        slice_ = self.axes[0].get_slice(*slice_)
+        slices = self.axes.get_slice(*slices)
         masked_hist = self.__new__(self.__class__)
         masked_hist.name = self.name
         masked_hist.title = self.title
-        masked_hist.data = self.data[slice_]
+        masked_hist.data = self.data[slices]
         try:
-            masked_hist._errors = self._errors[slice_]
+            masked_hist._errors = self._errors[slices]
         except AttributeError:
             masked_hist._errors = None
 
-        masked_hist.axes = self.axes.masked_by(slice_)
+        # we can used masked here because its a little more
+        # efficient and we've already called get_slice
+        masked_hist.axes = self.axes.masked_by(*slices)
         assert masked_hist.shape == masked_hist.axes.shape
+        masked_hist.underflow = None
+        masked_hist.overflow = None
         return masked_hist
 
     def as_matrix(self):
@@ -460,7 +467,7 @@ class Histogram:
             ranges = self.bin_ranges(*val)
             return self.data[ranges]
         else:
-            i = self.axes[0].getbin(val)
+            i = self.axes.get_bin(val)
             if i == Underflow:
                 return self.underflow
             elif i == Overflow:
@@ -882,23 +889,27 @@ class HistogramRatioPair:
     @classmethod
     def WithKeysInRootObject(cls, container, num_key, den_key):
         keys = (num_key, den_key)
-        objs = (get_root_object(container, key) for key in keys)
+        objs = tuple(get_root_object(container, key) for key in keys)
+        for key, obj in zip(keys, objs):
+            if obj == None:
+                raise ValueError("Histogram identified by %s not found" % key)
         n, d = map(Histogram.BuildFromRootHist, objs)
         return cls(n, d)
 
-    def with_masked_domain(self, *domain):
+    def with_sliced_domain(self, *domain):
         """
         Return a HistogramRatioPair with the domain.
         """
         num, den = self.pair
-        domain_slice = self.axes[0].get_slice(*domain)
+        domain_slice = self.axes.get_slice(*domain)
 
         result = self.__new__(self.__class__)
         n = result.numerator = num.apply_slice(*domain)
-        assert n.x_axis.shape == n.data.shape
+        assert n.axes.shape == n.data.shape, '(%s ≠ %s)' % (n.axes.shape, n.data.shape)
         result.denominator = den.apply_slice(*domain)
-        result.axes = self.axes.sliced_by(domain_slice)
-        assert result.axes[0].shape == result.numerator.data.shape, "%s" % ((result.axes[0].shape , num.x_axis.shape), )
+        result.axes = self.axes.sliced_by(*domain_slice)
+        assert result.axes.shape == n.data.shape,\
+            "%s ≠ %s" % (result.axes.shape, n.data.shape)
         result._ratio = None
         return result
 
@@ -906,7 +917,6 @@ class HistogramRatioPair:
         """
         Return a HistogramRatioPair with the domain.
         """
-
         num, den = self.pair
         mask_zeros = (num.data != 0.0) & (den.data != 0.0)
         if np.all(mask_zeros):
@@ -915,7 +925,7 @@ class HistogramRatioPair:
         result.numerator = num.apply_mask(mask_zeros)
         result.denominator = den.apply_mask(mask_zeros)
         result.axes = self.axes.masked_by(mask_zeros)
-        assert result.axes[0].shape == result.numerator.x_axis.shape
+        assert result.axes.shape == result.numerator.shape
         result._ratio = None
         return result
 
@@ -929,10 +939,19 @@ class HistogramRatioPair:
         The ratio of the two histograms
         """
         if self._ratio is None:
-            self._raito = self.numerator / self.denominator
+            self._ratio = self.numerator / self.denominator
         return self._ratio
 
     @property
     def shape(self):
         return self.axes.shape
+
+    def __iter__(self):
+        """
+        Yields the numerator followed by denominator.
+
+        This function allows the use of ``num, den = pair`` notation
+        """
+        yield self.numerator
+        yield self.denominator
 
