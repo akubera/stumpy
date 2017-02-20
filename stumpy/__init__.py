@@ -4,7 +4,7 @@
 """
 """
 
-from .histogram import Histogram
+from .histogram import Histogram, HistogramRatioPair
 
 
 def enable_inline_ROOT_stuff():

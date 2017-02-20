@@ -15,7 +15,7 @@ from copy import copy
 from operator import mul
 from functools import reduce
 from itertools import zip_longest
-from .utils import root_histogram_datatype, get_root_object
+from .utils import root_histogram_datatype, get_root_object, enumerate_histogram
 
 from .axis import Axis, MultiAxis, Overflow, Underflow
 
@@ -93,23 +93,15 @@ class Histogram:
         """
         if len(axis_parameters) == 0:
             raise ValueError("Histogram must be given axis_parameters")
-        elif isinstance(axis_parameters[0], int):
-            newaxis = Axis.BuildWithLinearSpacing
-            axis_kwargs = kwargs.get('x_params', {})
-            axis_kwargs.update(kwargs.get('axis_params', ({}, ))[0])
-            self.axes = (newaxis(*axis_parameters, **axis_kwargs), )
-        else:
-            self.axes = tuple(Axis(axis_param)
-                              for axis_param in axis_parameters)
-
-        shape = tuple(axis.nbins for axis in self.axes)
-        self.data = np.zeros(shape)
+        self.axes = MultiAxis.FromData(axis_parameters)
+        self.data = np.zeros(self.axes.shape)
         self._errors = None
         self.underflow, self.overflow = 0.0, 0.0
         self.title = kwargs.pop('title', '<Histogram Title>')
+        self.name = kwargs.pop('name', None)
 
     @classmethod
-    def BuildFromData(cls, data, axis, errors=None, name=None, **kwargs):
+    def BuildFromData(cls, data, axes, errors=None, name=None, **kwargs):
         """
         Construct the histogram from data.
 
@@ -144,14 +136,12 @@ class Histogram:
             The shape of the data and error arrays do not match.
         """
         self = cls.__new__(cls)
-        if isinstance(axis, tuple) and len(axis) == 1:
-            self.axes = (Axis(axis[0]), )
-        elif np.ndim(data) == 1:
-            self.axes = (Axis(axis), )
-        else:
-            self.axes = tuple(Axis(axis_data) for axis_data in axis)
+        self.axes = copy(axes) if isinstance(axes, MultiAxis) else\
+                    MultiAxis.FromData(axes)
+        assert self.axes.shape == np.shape(data), "Data and axes shape mismatch "\
+            "(%s ≠ %s)" % (self.axes.shape, np.shape(data))
         self.name = name
-        self.data = data
+        self.data = np.array(data)
         self.underflow = 0.0
         self.overflow = 0.0
         self.title = kwargs.pop('title', '')
@@ -338,6 +328,10 @@ class Histogram:
     def shape(self):
         return self.data.shape
 
+    @property
+    def ndim(self):
+        return self.data.ndim
+
     def fill(self, *data):
         """
         Fill bin found at 'data' by an unweighted value of 1.0.
@@ -431,7 +425,7 @@ class Histogram:
         """
         the_copy = Histogram.BuildFromData(data=np.copy(self.data),
                                            errors=np.copy(self.errors),
-                                           axis=self.axes)
+                                           axes=self.axes)
         the_copy.title = self.title
         the_copy.underflow = self.underflow
         the_copy.overflow = self.overflow
@@ -483,26 +477,28 @@ class Histogram:
                                         np.dtype(np.float64): 'D',
                                      }[self.data.dtype])
         hist_class = getattr(ROOT, hist_classname)
-        if self.data.ndim == 1:
-            name = kwargs.pop('name', (self.name or ""))
-            title = kwargs.pop('title', (self.title or "<UNSET TITLE>"))
-            hist = hist_class(name,
-                              title,
-                              self.x_axis.nbins,
-                              self.x_axis.min,
-                              self.x_axis.max,)
-            for i, (d, e) in enumerate(zip(self.data, self.errors), 1):
-                hist.SetBinContent(i, d)
-                hist.SetBinError(i, e)
-            # hist.SetOverflow(self.overflow)
-            # hist.SetUnderflow(self.underflow)
+        name = kwargs.pop('name', (self.name or ""))
+        title = kwargs.pop('title', (self.title or "<UNSET TITLE>"))
+
+        hist = hist_class(str(self.name), str(self.title), *self.axes.bin_info)
+
+        if self._errors is None:
+            for i, d in enumerate_histogram(self, start=1):
+                hist.SetBinContent(*i, d)
         else:
+            for i, (d, e) in enumerate_histogram(self, start=1, with_errors=1):
+                hist.SetBinContent(*i, d)
+                hist.SetBinError(*i, e)
 
-            axis_info = np.array([(axis.nbins, axis.min, axis.max)
-                for axis in self.axes
-            ]).flatten()
-
-            hist = hist_class(self.name, self.title, *self.axes.bin_info)
+        # TODO: Implement copying overflow data
+        # if hist.ndim == 1:
+        #     hist.SetBinContent(0, self.underflow or 0)
+        #     hist.SetBinContent(hist.shape[0] + 1, self.overflow or 0)
+        #     hist.SetBinError(0, ?)
+        #     hist.SetBinError(0, ?)
+        # elif hist.ndim == 2:
+        #   xsize, ysize = hist.shape
+        #   ???
 
         return hist
 
@@ -899,12 +895,13 @@ class HistogramRatioPair:
         domain_slice = self.axes.get_slice(*domain)
 
         result = self.__new__(self.__class__)
-        n = result.numerator = num.apply_slice(*domain)
-        assert n.axes.shape == n.data.shape, '(%s ≠ %s)' % (n.axes.shape, n.data.shape)
+        result.numerator = num.apply_slice(*domain)
+        assert result.numerator.axes.shape == result.numerator.data.shape,\
+            "%s ≠ %s" % (result.numerator.axes.shape, result.numerator.data.shape)
         result.denominator = den.apply_slice(*domain)
-        result.axes = self.axes.sliced_by(*domain_slice)
-        assert result.axes.shape == n.data.shape,\
-            "%s ≠ %s" % (result.axes.shape, n.data.shape)
+        result.axes = self.axes.masked_by(*domain_slice)
+        assert result.axes.shape == result.numerator.data.shape,\
+            "%s ≠ %s" % (result.axes.shape, result.numerator.data.shape)
         result._ratio = None
         return result
 
@@ -920,7 +917,8 @@ class HistogramRatioPair:
         result.numerator = num.apply_mask(mask_zeros)
         result.denominator = den.apply_mask(mask_zeros)
         result.axes = self.axes.masked_by(mask_zeros)
-        assert result.axes.shape == result.numerator.shape
+        assert result.axes.shape == result.numerator.shape,\
+            "%s ≠ %s" % (result.axes.shape, result.numerator.shape)
         result._ratio = None
         return result
 
