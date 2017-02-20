@@ -51,3 +51,29 @@ def root_histogram_datatype(hist):
     else:
         raise TypeError("Not a root histogram")
 
+
+def enumerate_histogram(hist, start=1, *, with_errors=False):
+    """
+    Get each index and with_error
+    """
+    enumerate_hist = {1: enumerate,
+                      2: enumerate_2d,
+                      3: enumerate_3d}[hist.ndim]
+
+    if with_errors:
+        hist_iter = enumerate_hist(hist.data, hist.errors, start=start)
+    else:
+        hist_iter = enumerate_hist(hist.data, start=start)
+    yield from hist_iter
+
+
+def enumerate_2d(*args, start=0):
+    for i, a, in enumerate(zip(*args), start):
+        for j, b in enumerate(zip(*a), start):
+            yield (i, j), b
+
+
+def enumerate_3d(*args, start=0):
+    for (i, j), a in enumerate_2d(*args, start=start):
+        for k, b in enumerate(zip(*a), start):
+            yield (i, j, k), b

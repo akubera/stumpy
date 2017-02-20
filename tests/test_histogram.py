@@ -6,7 +6,7 @@ import pytest
 import itertools
 import numpy as np
 from stumpy.histogram import Histogram
-
+from stumpy.utils import enumerate_2d, enumerate_3d
 
 @pytest.fixture
 def ROOT():
@@ -224,7 +224,7 @@ def test_histogram_sets_errors_2d(use_sumw2):
         h.Fill(x * 2, y)
 
     hist = Histogram.BuildFromRootHist(h)
-    for i, j, (v, e) in enumerate_2d(hist.data, hist.errors):
+    for (i, j), (v, e) in enumerate_2d(hist.data, hist.errors):
         assert v == h.GetBinContent(i + 1, j + 1)
         assert e == h.GetBinError(i + 1, j + 1)
         assert np.isclose(e, np.sqrt(v))
@@ -239,21 +239,10 @@ def test_histogram_sets_errors_3d(use_sumw2):
         h.Fill(x, y, z)
 
     hist = Histogram.BuildFromRootHist(h)
-    for i, j, k, (v, e) in enumerate_3d(hist.data, hist.errors):
+    for (i, j, k), (v, e) in enumerate_3d(hist.data, hist.errors):
         assert v == h.GetBinContent(i + 1, j + 1, k + 1)
         assert e == h.GetBinError(i + 1, j + 1, k + 1)
         assert np.isclose(e, np.sqrt(v))
-
-
-def enumerate_2d(*args):
-    for i, a, in enumerate(zip(*args)):
-        for j, b in enumerate(zip(*a)):
-            yield i, j, b
-
-def enumerate_3d(*args):
-    for i, j, a in enumerate_2d(*args):
-        for k, b in enumerate(zip(*a)):
-            yield i, j, k, b
 
 
 def test_histogram_constructor():
@@ -270,6 +259,7 @@ def test_histogram_constructor():
 def test_1d_histogram_fill():
     # hist = TH1D()
     pass
+
 
 @pytest.fixture
 def ph1():
@@ -305,8 +295,8 @@ def test_histogram_subtraction():
         assert cy == ay - by
 
 
-def test_histogram_subtraction_again():
-    np.random.seed(42)
+def test_histogram_subtraction_again(rnd_seed):
+    np.random.seed(rnd_seed)
 
     hist_a = Histogram(45, 0, 1.0)
     hist_b = Histogram(45, 0, 1.0)
