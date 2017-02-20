@@ -125,7 +125,6 @@ class Axis:
         Create axis with a slice applied to the data (_low_edges)
         """
         slice_ = self.get_slice(slice_)
-        print(">>>", slice_)
         axis = self.masked_by(slice_)
         return axis
 
@@ -295,6 +294,47 @@ class MultiAxis(tuple, Axis):
     """
 
     @classmethod
+    def FromData(cls, data):
+        """
+        Create a MultiAxis object from aritrary objects
+        """
+        def matches_bininfo_pattern(obj):
+            numtype = (float, int)
+            if isinstance(obj, tuple) and len(obj) == 3:
+                return type(obj[0]) == int \
+                        and type(obj[1]) in numtype \
+                        and type(obj[2]) in numtype
+            return False
+
+        def data_to_axes(obj):
+            if isinstance(obj, Axis):
+                yield obj
+            elif isinstance(obj, np.ndarray):
+                yield Axis(obj)
+            elif isinstance(obj, tuple) and len(obj) == 1:
+                yield Axis(obj[0])
+            elif matches_bininfo_pattern(obj):
+                yield Axis.BuildWithLinearSpacing(*obj)
+            else:
+                try:
+                    it = iter(obj)
+                except TypeError:
+                    yield Axis(obj)
+                else:
+                    for n in it:
+                        yield from data_to_axes(n)
+                    # elif isinstance(axis_parameters[0], int):
+                    #     newaxis =
+                    #     axis_kwargs = kwargs.get('x_params', {})
+                    #     axis_kwargs.update(kwargs.get('axis_params', ({}, ))[0])
+                    #     yield from (Axis.BuildWithLinearSpacing(*axis_parameters, **axis_kwargs), ))
+                    # else:
+                    #     self.axes = MultiAxis(*map(Axis, axis_parameters))
+        self = cls.__new__(cls, tuple(data_to_axes(data)))
+        self._axes = self
+        return self
+
+    @classmethod
     def FromRootHistogram(cls, hist):
         """
         Create a MultiAxis object from axes found in a ROOT histogram
@@ -307,7 +347,6 @@ class MultiAxis(tuple, Axis):
         axes = tuple(map(Axis.FromROOTAxis, hist_axes[:hist.GetDimension()]))
 
         self = cls.__new__(cls, axes)
-
         self._axes = self
         return self
 
@@ -317,26 +356,25 @@ class MultiAxis(tuple, Axis):
                 "(%d > %d)" % (len(slices), len(self._axes)))
         return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
 
-
     def get_slice(self, *slices):
         if len(slices) > len(self._axes):
             raise RuntimeError("More slices than axes! "\
                 "(%d > %d)" % (len(slices), len(self._axes)))
         return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
 
-
     def sliced_by(self, *slices):
         """
         Construct new MultiAxis using sliced versions of associated axes.
         """
         cls = self.__class__
-        print("[sliced_by]", slices)
         if len(slices) > len(self._axes):
             raise RuntimeError("More slices than axes! "\
                 "(%d > %d)" % (len(slices), len(self._axes)))
 
         axes = tuple(a.sliced_by(s) for a, s in _zip_longest(self._axes, slices))
+
         multiaxis = cls.__new__(cls, axes)
+        multiaxis._axes = multiaxis
         return multiaxis
 
     def masked_by(self, *masks):
@@ -344,9 +382,10 @@ class MultiAxis(tuple, Axis):
         Construct new MultiAxis using masked versions of associated axes.
         """
         cls = self.__class__
-        print("[masked_by]", masks)
         axes = tuple(a.masked_by(m) for a, m in _zip_longest(self._axes, masks))
+
         multiaxis = cls.__new__(cls, axes)
+        multiaxis._axes = multiaxis
         return multiaxis
 
     @property
@@ -364,8 +403,8 @@ class MultiAxis(tuple, Axis):
         for use in constructing ROOT histograms
         """
         result = []
-        for a in axes:
-            result += [axis.nbins, axis.min, axis.max]
+        for a in self._axes:
+            result += [int(a.nbins), float(a.min), float(a.max)]
         return result
 
     def meshgrid(self, point_at='center'):
