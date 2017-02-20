@@ -357,6 +357,17 @@ class MultiAxis(tuple, Axis):
     def ndim(self):
         return len(self._axes)
 
+    @property
+    def bin_info(self):
+        """
+        Return flattened list of (bin count, min, max) triples
+        for use in constructing ROOT histograms
+        """
+        result = []
+        for a in axes:
+            result += [axis.nbins, axis.min, axis.max]
+        return result
+
     def meshgrid(self, point_at='center'):
         """
         Return numpy 'meshgrid' parameters created from all axes.

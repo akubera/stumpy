@@ -8,7 +8,6 @@ Histogram helper classes/methods.
 import numpy as np
 
 import uuid
-import functools
 import operator as op
 import itertools as itt
 
@@ -290,7 +289,6 @@ class Histogram:
         masked_hist.axes = self.axes.masked_by(*masks)
         masked_hist.underflow = None
         masked_hist.overflow = None
-        assert masked_hist.shape == masked_hist.axes.shape
         return masked_hist
 
     def apply_slice(self, *slices):
@@ -332,10 +330,8 @@ class Histogram:
     @errors.setter
     def errors(self, errs):
         if np.shape(errs) != self.data.shape:
-            raise TypeError("Unexpected shape of errors {} != {} (expected)".format(
-                np.shape(errors),
-                self.data.shape
-            ))
+            raise ValueError("Attempting to set error array of incorrect shape "
+                "({} ≠ {})".format(np.shape(errs), self.data.shape))
         self._errors = errs
 
     @property
@@ -501,11 +497,12 @@ class Histogram:
             # hist.SetOverflow(self.overflow)
             # hist.SetUnderflow(self.underflow)
         else:
+
             axis_info = np.array([(axis.nbins, axis.min, axis.max)
                 for axis in self.axes
             ]).flatten()
 
-            hist = hist_class(self.name, self.title, *axis_info)
+            hist = hist_class(self.name, self.title, *self.axes.bin_info)
 
         return hist
 
@@ -633,7 +630,6 @@ class Histogram:
         ranges = []
         summed_axes = []
 
-        axes = self.axes
         for i, axis in enumerate(self.axes):
             if i == axis_idx:
                 ranges.append(axis.get_slice(bounds))
@@ -711,7 +707,7 @@ class Histogram:
         In place add method.
         """
         self.data += rhs.data
-        self._errors = np.sqrt(self.errors ** 2 + rhs.errors  ** 2)
+        self._errors = np.sqrt(self.errors ** 2 + rhs.errors ** 2)
         return self
 
     def add(self, rhs, scale=1.0):
@@ -738,9 +734,8 @@ class Histogram:
         Inplace Histogram Subtraction
         """
         self.data -= rhs.data
-        self._errors = np.sqrt(self.errors ** 2 + rhs.errors  ** 2)
+        self._errors = np.sqrt(self.errors ** 2 + rhs.errors ** 2)
         return self
-
 
     def __mul__(self, rhs):
         """
@@ -819,8 +814,8 @@ class Histogram:
         Matrix multiplication
         """
         res = copy(self)
-        # res.data = lhs @ self.data
-        np.matmul(self.data, lhs, out=res.data)
+        # res.data = self.data @ rhs
+        np.matmul(self.data, rhs, out=res.data)
         return res
 
     def __rmatmul__(self, lhs):
@@ -954,4 +949,3 @@ class HistogramRatioPair:
         """
         yield self.numerator
         yield self.denominator
-
