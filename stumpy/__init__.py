@@ -21,3 +21,10 @@ def enable_inline_ROOT_stuff():
         console.log("[stumpy::enable_inline_ROOT_stuff] Loaded JSRoot", ROOT);
     })
     """))
+
+
+def chi2(data, model):
+    """
+    Returns
+    """
+    return np.sum( (data - model) ** 2 / model ** 2)
