@@ -355,14 +355,14 @@ class MultiAxis(tuple, Axis):
 
     def get_bin(self, value):
         if len(value) != len(self._axes):
-            raise ValueError("Dimension of value does not equal dimension of axes! "\
-                "(%d > %d)" % (len(slices), len(self._axes)))
-        return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
+            raise ValueError("Dimension of value does not equal dimension of axes! "
+                             "(%d > %d)" % (len(value), len(self._axes)))
+        return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, value))
 
     def get_slice(self, *slices):
         if len(slices) > len(self._axes):
-            raise RuntimeError("More slices than axes! "\
-                "(%d > %d)" % (len(slices), len(self._axes)))
+            raise RuntimeError("More slices than axes! "
+                               "(%d > %d)" % (len(slices), len(self._axes)))
         return tuple(a.get_slice(s) for a, s in _zip_longest(self._axes, slices))
 
     def sliced_by(self, *slices):
@@ -371,8 +371,8 @@ class MultiAxis(tuple, Axis):
         """
         cls = self.__class__
         if len(slices) > len(self._axes):
-            raise RuntimeError("More slices than axes! "\
-                "(%d > %d)" % (len(slices), len(self._axes)))
+            raise RuntimeError("More slices than axes! "
+                               "(%d > %d)" % (len(slices), len(self._axes)))
 
         axes = tuple(a.sliced_by(s) for a, s in _zip_longest(self._axes, slices))
 
@@ -444,4 +444,4 @@ class MultiAxis(tuple, Axis):
             'X': 1,
             'Y': 2,
             'Z': 3,
-        }.get(name, 0)
+        }.get(name.upper(), 0)
