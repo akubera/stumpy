@@ -12,6 +12,7 @@ from enum import Enum
 Overflow = type("OVERFLOW", (), {})()
 Underflow = type("UNDERFLOW", (), {})()
 
+
 class ByEdge(Enum):
     High = 0
     Low = 1
@@ -34,6 +35,8 @@ class Axis:
 
     OVERFLOW = Overflow
     UNDERFLOW = Underflow
+
+    ndim = 1
 
     def __init__(self, data=None, **kwargs):
         """
