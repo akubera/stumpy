@@ -306,8 +306,8 @@ class Histogram:
     def as_matrix(self):
         """
         Returns the data in matrix form, so data is addressed in [y, x]
-        or [j, i] mode instead of [x, y] mode. This ends up being a
-        simple transpose.
+        or [j, i] mode instead of [x, y] mode.
+        This ends up being a simple transpose.
         """
         return self.data.T
 
@@ -352,17 +352,19 @@ class Histogram:
 
     def fill_all(self, data):
         """
-        Fill histogram with all values in data. This is a helper method to
-        automatically fill the histogram with a collection of data.
+        Fill histogram with all values in data.
+        This is a helper method to automatically fill the histogram
+        with a collection of data.
 
-        For example, if this is a two dimensional histogram, create a numpy
-        array with shape (X, 2) to fill the histogram with X pairs.
+        For example, if this is a two dimensional histogram, create
+        a numpy array with shape (X, 2) to fill the histogram with
+        X pairs.
 
         Parameters
         ----------
         data : iterable
-            Data is an iterable returning N numbers, where N is dimension of
-            histogram.
+            Data is an iterable returning N numbers, where N is
+            dimension of histogram.
 
         Returns
         -------
@@ -399,9 +401,10 @@ class Histogram:
         """
         Fill histogram bin containing 'data' with weight.
 
-        There are two ways to use this method - the weight keyword argument is
-        None, and data is an array of N + 1 dimensions, where N is dimension of
-        this histogram, where the last value in data is the weight
+        There are two ways to use this method - the weight keyword
+        argument is None, and data is an array of N + 1 dimensions,
+        where N is dimension of this histogram, where the last value
+        in data is the weight.
 
         Or weight is NOT none, and data is an N dimension collection.
 
@@ -420,8 +423,8 @@ class Histogram:
 
     def __copy__(self):
         """
-        Create a copy of this histogram. Essentially calls np.copy on all data
-        structure.
+        Create a copy of this histogram. Essentially calls np.copy on
+        all data structure.
         """
         the_copy = Histogram.BuildFromData(data=np.copy(self.data),
                                            errors=np.copy(self.errors),
@@ -433,10 +436,12 @@ class Histogram:
 
     def __getitem__(self, val):
         """
-        Returns the value of bin containing the value val. If val is an
-        integer, this is interpreted as a bin number, and the value at index
-        val is returned.  If val is a float, the corresponding bin is searched
-        for automatically and the value returned. If the val is tuple of values
+        Returns the value of bin containing the value val.
+        If val is an integer, this is interpreted as a bin number,
+        and the value at index val is returned.
+        If val is a float, the corresponding bin is searched for
+        automatically and the value returned.
+        If the val is tuple of values
 
 
         Examples
@@ -504,8 +509,8 @@ class Histogram:
 
     def draw_nb_ROOT(self, **opts):
         """
-        Creates and displays an ipython html element containing the JSROOT container of the
-        drawing.
+        Creates and displays an ipython html element containing the
+        JSROOT container of the drawing.
         """
         from IPython.display import HTML, Javascript, display
         div_uid = uuid.uuid1()
@@ -526,8 +531,8 @@ class Histogram:
 
     def bounded_domain(self, *ranges):
         """
-        Return a numpy array containing the bin centers of the range that
-        this axis' domain.
+        Return a numpy array containing the bin centers of the range
+        that this axis' domain.
         """
         if ranges is ():
             domains = iter(axis.domain() for axis in self.axes)
@@ -545,8 +550,9 @@ class Histogram:
 
     def centered_bin_ranges(self, *ranges, expand=False, inclusive=False):
         """
-        Applies centered_bin_range_pair to each axis. Returns tuple of integer
-        pairs, or if expand is True, returns one flattened tuple of ints.
+        Applies centered_bin_range_pair to each axis.
+        Returns tuple of integer pairs, or if expand is True, returns
+        one flattened tuple of ints.
         """
         res = []
         for r, a in zip(ranges, self.axes):
@@ -564,8 +570,9 @@ class Histogram:
 
     def bin_at(self, *x):
         """
-        Find and return the bin location which contains the value 'x'. The
-        number of values in x must equal the dimension of the histogram.
+        Find and return the bin location which contains the value 'x'.
+        The number of values in x must equal the dimension of the
+        histogram.
         """
         if len(self.axes) == 1:
             return self.axes[0].bin_at(*x)
@@ -573,24 +580,25 @@ class Histogram:
 
     def get_slice(self, *x):
         """
-        Find and return the bin location which contains the value 'x'. The
-        number of values in x must equal the dimension of the histogram.
+        Find and return the bin location which contains the value 'x'.
+        The number of values in x must equal the dimension of the histogram.
         """
         get_slice = Axis.get_slice
         return tuple(itt.starmap(get_slice, zip_longest(self.axes, x)))
 
     def value_at(self, x, y=0.0, z=0.0):
         """
-        Return the value stored in the bin which contains the value 'x'. The
-        number of values in x must equal the dimension of the histogram.
+        Return the value stored in the bin which contains the value 'x'.
+        The number of values in x must equal the dimension of the histogram.
         """
         a_bin = self.bin_at(x, y, z)
         return self.data[a_bin]
 
     def value_in(self, *i):
         """
-        Return the value located in bin 'i'. This is equivalent to using the
-        [] operator with a tuple of integers.
+        Return the value located in bin 'i'.
+        This is equivalent to using the [] operator with a tuple of
+        integers.
         """
         return self.data[i]
 
@@ -603,10 +611,12 @@ class Histogram:
 
     def project_1d(self, axis_idx, *axis_ranges, bounds=(None, None)):
         """
-        Project multi-dimensional data into one dimention along axis with
-        index 'axis_idx'. The variable 'axis_ranges' parameter limits the
-        range of all other axes, with the position of each axis_range
-        corresponding to each axis NOT the axis being projected into.
+        Project multi-dimensional data into one dimention along axis
+        with index 'axis_idx'.
+        The variable 'axis_ranges' parameter limits the range of all
+        other axes, with the position of each axis_range corresponding
+        to each axis NOT the axis being projected into.
+        
         For example:
 
             # projects onto x-axis, y is limited between (1.0, 2.0), z (-1.0, 1.0)
@@ -615,8 +625,8 @@ class Histogram:
             # projects onto y-axis, x is limited between (1.0, 2.0), z (-1.0, 1.0)
             hist.project_1d(1, (1.0, 2.0), (-1.0, 1.0))
 
-        The optional 'bounds' variable is the limit of the projected axis; this
-        defaults to no-limit
+        The optional 'bounds' variable is the limit of the projected
+        axis; this defaults to no-limit
         """
         assert 0 <= axis_idx < self.data.ndim
 
@@ -675,15 +685,16 @@ class Histogram:
     #
     def __radd__(self, lhs):
         """
-        Rightside add. Applies standard (lefthand) addition, as addition is a
-        communitive operation on histograms.
+        Rightside add. Applies standard (lefthand) addition, as
+        addition is a communitive operation on histograms.
         """
         return self.__add__(lhs)
 
     def __add__(self, rhs):
         """
-        Create a new histogram which is the result of the addition of the two
-        histograms. The histograms must have the same shape and bins.
+        Create a new histogram which is the result of the addition of
+        the two histograms.
+        The histograms must have the same shape and bins.
 
         Errors are propagated as expected:
         .. math::
@@ -708,7 +719,8 @@ class Histogram:
 
     def add(self, rhs, scale=1.0):
         """
-        Explicit add method, able to automatically scale the right hand side.
+        Explicit add method, able to automatically scale the right
+        hand side.
         """
         if scale == 1.0:
             return self + rhs
@@ -760,11 +772,11 @@ class Histogram:
         """
         Histogram Division
 
-        If right hand side is a number, this simply scales the data and errors
-        in the histogram.
+        If right hand side is a number, this simply scales the data
+        and errors in the histogram.
 
-        If right hand side is another histogram, this will do bin-by-bin
-        division, calculating errors appropriately.
+        If right hand side is another histogram, this will do
+        bin-by-bin division, calculating errors appropriately.
         """
         if isinstance(rhs, Histogram):
             quotient = copy(self)
@@ -825,7 +837,8 @@ class Histogram:
 
     def triple_at(self, index):
         """
-        Helper method for yielding a particular (x, y, e) triple in the hist
+        Helper method for yielding a particular (x, y, e) triple in
+        the hist
         """
         return self.axes[0][index], self.data[index], self.errors[index]
 
@@ -859,8 +872,8 @@ class Histogram:
 
     def nth_axis(self, idx):
         """
-        Returns the nth axis in histogram - zero based. Simply access this from
-        the axis tuple.
+        Returns the nth axis in histogram - zero based.
+        Simply access this from the axis tuple.
         """
         return self.axes[idx]
 
@@ -924,7 +937,17 @@ class HistogramRatioPair:
 
     @property
     def pair(self):
+        """
+        Return (numerator, denominator) pair
+        """
         return self.numerator, self.denominator
+
+    @property
+    def data(self):
+        """
+        Return numerator & denominator data arrays
+        """
+        return self.numerator.data, self.denominator.data
 
     @property
     def ratio(self):
@@ -938,6 +961,22 @@ class HistogramRatioPair:
     @property
     def shape(self):
         return self.axes.shape
+
+    @property
+    def x_axis(self):
+        return self.axes[0]
+
+    @property
+    def y_axis(self):
+        return self.axes[1]
+
+    @property
+    def z_axis(self):
+        return self.axes[2]
+
+    @property
+    def meshgrid(self):
+        return self.axes.meshgrid()
 
     def __iter__(self):
         """
