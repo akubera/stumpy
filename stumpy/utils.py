@@ -41,6 +41,32 @@ def get_root_object(obj, paths):
         return get_root_object(new_obj, rest[0])
 
 
+def drawable_to_image(image_filename, *objs, return_nbimage=False):
+    """
+    Save root object Drawn to image_filename.
+    If return nbimage is True, a Jupyter notebook displayable image
+    is returned.
+    """
+    from ROOT import TCanvas, TImage
+    c = TCanvas()
+    for obj in objs:
+        if isinstance(obj, tuple):
+            obj, opts = obj
+            obj.Draw(opts)
+        else:
+            obj.Draw()
+
+    if image_filename.endswith(".eps"):
+        c.Print(image_filename, 'eps')
+    else:
+        img = TImage.Create()
+        img.FromPad(c)
+        img.WriteImage(image_filename)
+    if return_nbimage:
+        from IPython.display import Image
+        return Image(image_filename)
+
+
 def root_histogram_datatype(hist):
     import re
     for next_class in hist.__class__.__mro__:
