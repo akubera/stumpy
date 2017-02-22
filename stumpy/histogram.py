@@ -488,7 +488,7 @@ class Histogram:
         hist = hist_class(str(self.name), str(self.title), *self.axes.bin_info)
 
         if self._errors is None:
-            for i, d in enumerate_histogram(self, start=1):
+            for i, (d, ) in enumerate_histogram(self, start=1):
                 hist.SetBinContent(*i, d)
         else:
             for i, (d, e) in enumerate_histogram(self, start=1, with_errors=1):
@@ -616,7 +616,7 @@ class Histogram:
         The variable 'axis_ranges' parameter limits the range of all
         other axes, with the position of each axis_range corresponding
         to each axis NOT the axis being projected into.
-        
+
         For example:
 
             # projects onto x-axis, y is limited between (1.0, 2.0), z (-1.0, 1.0)

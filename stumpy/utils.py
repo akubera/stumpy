@@ -56,7 +56,7 @@ def enumerate_histogram(hist, start=1, *, with_errors=False):
     """
     Get each index and with_error
     """
-    enumerate_hist = {1: enumerate,
+    enumerate_hist = {1: enumerate_1d,
                       2: enumerate_2d,
                       3: enumerate_3d}[hist.ndim]
 
@@ -65,6 +65,11 @@ def enumerate_histogram(hist, start=1, *, with_errors=False):
     else:
         hist_iter = enumerate_hist(hist.data, start=start)
     yield from hist_iter
+
+
+def enumerate_1d(*args, start=0):
+    for i, a in enumerate(zip(*args), start):
+        yield (i, ), a
 
 
 def enumerate_2d(*args, start=0):
