@@ -631,7 +631,7 @@ class Histogram:
         assert 0 <= axis_idx < self.data.ndim
 
         # merge specified boundries with infinite slice(None) generator
-        bounds = itt.chain(axis_ranges, itt.repeat(slice(None)))
+        axis_range = itt.chain(axis_ranges, itt.repeat(slice(None)))
 
         ranges = []
         summed_axes = []
@@ -640,7 +640,7 @@ class Histogram:
             if i == axis_idx:
                 ranges.append(axis.get_slice(bounds))
             else:
-                s = axis.get_slice(next(bounds))
+                s = axis.get_slice(next(axis_range))
                 ranges.append(s)
                 if isinstance(s, slice):
                     summed_axes.append(i)
