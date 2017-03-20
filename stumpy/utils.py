@@ -33,9 +33,9 @@ def get_root_object(obj, paths):
     except AttributeError:
         new_obj = obj.FindObject(key)
 
-    if new_obj == None and len(paths) is not 0:
+    if is_null(new_obj) and len(paths) is not 0:
         return get_root_object(obj, paths)
-    elif new_obj == None or len(rest) is 0:
+    elif is_null(new_obj) or len(rest) is 0:
         return new_obj
     else:
         return get_root_object(new_obj, rest[0])
@@ -108,3 +108,7 @@ def enumerate_3d(*args, start=0):
     for (i, j), a in enumerate_2d(*args, start=start):
         for k, b in enumerate(zip(*a), start):
             yield (i, j, k), b
+
+
+def is_null(obj):
+    return obj == None
