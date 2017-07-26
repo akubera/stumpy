@@ -5,7 +5,7 @@
 """
 
 from .histogram import Histogram, HistogramRatioPair
-
+from . import utils
 
 def enable_inline_ROOT_stuff():
     from IPython.display import Javascript, display

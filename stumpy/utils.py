@@ -15,30 +15,32 @@ ROOT_TO_NUMPY_DTYPE = {
 }
 
 
-def get_root_object(obj, paths, delim='.'):
+def get_root_object(obj, paths, delim='/'):
     """
     Return a root object contained in the obj
     """
     if isinstance(paths, (list, tuple)):
-        if len(paths) != 0:
-            path, paths = paths[0], paths[1:]
+        for path in paths:
+            found = get_root_object(obj, path)
+            if not is_null(found):
+                break
         else:
-            return None
-    else:
-        path, paths = paths, []
+            found = None
 
-    key, *rest = path.split(delim, 1)
+        return found
+
+    # seperate by dot delimiter
+    key, *rest = paths.split(delim, 1)
+
     try:
-        new_obj = obj.Get(key)
+        found_obj = obj.Get(key)
     except AttributeError:
-        new_obj = obj.FindObject(key)
+        found_obj = obj.FindObject(key)
 
-    if is_null(new_obj) and len(paths) is not 0:
-        return get_root_object(obj, paths, delim)
-    elif is_null(new_obj) or len(rest) is 0:
-        return new_obj
+    if len(rest) is 0 or is_null(found_obj):
+        return found_obj
     else:
-        return get_root_object(new_obj, rest[0], delim)
+        return get_root_object(found_obj, rest[0], delim)
 
 
 def drawable_to_image(image_filename, *objs, return_nbimage=False):
