@@ -29,8 +29,8 @@ def root_histogram_shape(root_hist, use_matrix_indexing=True):
     """
     dim = root_hist.GetDimension()
     shape = np.array([root_hist.GetNbinsZ(),
-                        root_hist.GetNbinsY(),
-                        root_hist.GetNbinsX()][3-dim:]) + 2
+                      root_hist.GetNbinsY(),
+                      root_hist.GetNbinsX()][3-dim:]) + 2
     if not use_matrix_indexing:
         shape = reversed(shape)
     return tuple(shape)
@@ -461,6 +461,10 @@ class Histogram:
         elif isinstance(val, tuple):
             ranges = self.bin_ranges(*val)
             return self.data[ranges]
+        elif isinstance(val, slice):
+            start = self.x_axis.getbin(val.start)
+            stop = self.x_axis.getbin(val.stop)
+            return self.data[start:stop]
         else:
             i = self.axes.get_bin(val)
             if i == Underflow:
