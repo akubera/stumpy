@@ -6,8 +6,6 @@
 A package to connect ROOT files to numpy projects.
 """
 
-from os import path
-from glob import glob
 from setuptools import setup, find_packages
 from importlib.machinery import SourceFileLoader
 
@@ -33,9 +31,6 @@ PACKAGES = find_packages(
     exclude=["*.tests", "*.tests.*", "tests.*", "tests"]
 )
 
-NAMESPACES = [
-]
-
 CLASSIFIERS = [
     "Development Status :: 1 - Planning",
     "Operating System :: OS Independent",
@@ -50,10 +45,9 @@ CLASSIFIERS = [
     "Natural Language :: English",
 ]
 
-metafile = path.join("stumpy", "__meta__.py")
-metadata = SourceFileLoader("stumpy.metadata", metafile).load_module()
+metadata = SourceFileLoader("stumpy.metadata", "stumpy/__meta__.py").load_module()
 
-tar_url = 'https://github.com/akubera/stumpy/archive/v%s.tar.gz' % (metadata.version) # noqa
+tar_url = 'https://github.com/akubera/stumpy/archive/v%s.tar.gz' % (metadata.version)
 
 setup(
     name=NAME,
@@ -70,7 +64,5 @@ setup(
     tests_require=TESTS_REQUIRE,
     setup_requires=SETUP_REQUIRES,
     packages=PACKAGES,
-    namespace_packages=NAMESPACES,
     platforms='all',
-    scripts=glob('scripts/*')
 )
