@@ -15,6 +15,33 @@ ROOT_TO_NUMPY_DTYPE = {
 }
 
 
+def iter_tobject(tobj, pattern=None):
+    from ROOT import TDirectory, TCollection
+    from fnmatch import fnmatch
+    import re
+
+    _Regex = type(re.compile(''))
+
+    if pattern is None:
+        passes = lambda _: True
+    elif isinstance(pattern, str):
+        passes = lambda name: fnmatch(name, pattern)
+    elif isinstance(pattern, _Regex):
+        passes = lambda name: pattern.matches(name) is not None
+    else:
+        passes = pattern
+
+    if isinstance(tobj, TDirectory):
+        for key in tobj.GetListOfKeys():
+            if passes(key.GetName()):
+                yield key.ReadObj()
+
+    elif isinstance(tobj, TCollection):
+        for obj in tobj:
+            if passes(obj.GetName()):
+                yield obj
+
+
 def get_root_object(obj, paths, delim='/'):
     """
     Return a root object contained in the obj
