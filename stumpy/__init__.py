@@ -6,6 +6,7 @@
 
 from .histogram import Histogram, HistogramRatioPair
 from . import utils
+import numpy as np
 
 def enable_inline_ROOT_stuff():
     from IPython.display import Javascript, display
@@ -27,4 +28,4 @@ def chi2(data, model):
     """
     Returns
     """
-    return np.sum( (data - model) ** 2 / model ** 2)
+    return np.sum((data - model) ** 2 / model ** 2)

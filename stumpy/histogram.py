@@ -8,14 +8,13 @@ Histogram helper classes/methods.
 import numpy as np
 
 import uuid
-import operator as op
 import itertools as itt
 
 from copy import copy
 from operator import mul
 from functools import reduce
 from itertools import zip_longest
-from .utils import root_histogram_datatype, get_root_object, enumerate_histogram
+from .utils import root_histogram_datatype, get_root_object, enumerate_histogram, is_null
 
 from .axis import Axis, MultiAxis, Overflow, Underflow
 
@@ -30,7 +29,7 @@ def root_histogram_shape(root_hist, use_matrix_indexing=True):
     dim = root_hist.GetDimension()
     shape = np.array([root_hist.GetNbinsZ(),
                       root_hist.GetNbinsY(),
-                      root_hist.GetNbinsX()][3-dim:]) + 2
+                      root_hist.GetNbinsX()][3 - dim:]) + 2
     if not use_matrix_indexing:
         shape = reversed(shape)
     return tuple(shape)
@@ -652,7 +651,8 @@ class Histogram:
         res = self.data[ranges].sum(axis=tuple(summed_axes))
         return res
 
-    def project_2d(self, axis_x, axis_y, *axis_ranges, bounds_x=slice(None), bounds_y=slice(None)):
+    def project_2d(self, axis_x, axis_y, *axis_ranges,
+                   bounds_x=slice(None), bounds_y=slice(None)):
         """
         Project the histogram into 2 dimensions.
         """
@@ -806,14 +806,15 @@ class Histogram:
             self._errors = np.sqrt(num_e_sq * den_sq + den_e_sq * num_sq)
             with np.errstate(divide='ignore', invalid='ignore'):
                 np.divide(self._errors, den_sq, out=self._errors)
-                self._errors[np.isfinite(self._errors) != True] = 0
+                self._errors[np.logical_not(np.isfinite(self._errors))] = 0
                 self.data /= rhs.data
-                self.data[np.isfinite(self.data) != True] = 0
+                self.data[np.logical_not(np.isfinite(self.data))] = 0
         elif isinstance(rhs, float):
             self.data /= rhs
             self._errors /= rhs
         elif isinstance(rhs, np.ndarray):
-            assert np.shape(rhs) == np.shape(self.data), "%s != %s" % (np.shape(rhs), np.shape(self.data))
+            assert np.shape(rhs) == np.shape(self.data), "{} ≠ {}".format(
+                np.shape(rhs), np.shape(self.data))
             self.data /= rhs
             self._errors /= rhs
         else:
@@ -899,7 +900,7 @@ class HistogramRatioPair:
         keys = (num_key, den_key)
         objs = tuple(get_root_object(container, key) for key in keys)
         for key, obj in zip(keys, objs):
-            if obj == None:
+            if is_null(obj):
                 raise ValueError("Histogram identified by %s not found" % key)
         n, d = map(Histogram.BuildFromRootHist, objs)
         return cls(n, d)

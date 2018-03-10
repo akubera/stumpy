@@ -304,9 +304,9 @@ class MultiAxis(tuple, Axis):
         def matches_bininfo_pattern(obj):
             numtype = (float, int)
             if isinstance(obj, tuple) and len(obj) == 3:
-                return type(obj[0]) == int \
-                        and type(obj[1]) in numtype \
-                        and type(obj[2]) in numtype
+                return (type(obj[0]) == int and
+                        type(obj[1]) in numtype and
+                        type(obj[2]) in numtype)
             return False
 
         def data_to_axes(obj):

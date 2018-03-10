@@ -140,5 +140,4 @@ def enumerate_3d(*args, start=0):
 
 
 def is_null(obj):
-    return obj == None
-
+    return obj == None  # noqa
