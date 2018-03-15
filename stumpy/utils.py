@@ -41,6 +41,86 @@ def iter_tobject(tobj, pattern=None):
             if passes(obj.GetName()):
                 yield obj
 
+def is_iterable(s):
+    import ROOT
+    return (isinstance(s, ROOT.TCollection) or
+            isinstance(s, ROOT.TDirectory))
+
+def walk_tobject(o):
+    import ROOT
+    def _iter(obj):
+        if isinstance(obj, ROOT.TCollection):
+            yield from obj
+        elif isinstance(obj, ROOT.TDirectory):
+            for key in obj.GetListOfKeys():
+                s = key.ReadObj()
+                yield s
+
+    def _walk(obj):
+        obj_name = obj.GetName()
+        for subobj in _iter(obj):
+            if is_iterable(subobj):
+                for n, oo in _walk(subobj):
+                    yield '%s/%s' % (obj_name, n), oo
+            else:
+                yield '%s/%s' % (obj_name, subobj.GetName()), subobj
+
+    for obj in _iter(o):
+        if is_iterable(obj):
+            yield from _walk(obj)
+        else:
+            yield obj.GetName(), obj
+
+
+
+def walk_matching(o, pat):
+    import ROOT
+    from copy import copy
+
+    def _iter(obj):
+        if isinstance(obj, ROOT.TCollection):
+            yield from obj
+        elif isinstance(obj, ROOT.TDirectory):
+            for key in obj.GetListOfKeys():
+                s = key.ReadObj()
+                yield s
+
+    def _walk(obj, nn):
+        obj_name = obj.GetName()
+        try:
+            pat = next(nn)
+        except StopIteration:
+            return
+        for subobj in _iter(obj):
+            subname = subobj.GetName()
+            if not pat.match(obj_name):
+                continue
+            if is_iterable(subobj):
+                for n, oo in _walk(subobj, copy(nn)):
+                    yield '%s/%s' % (obj_name, n), oo
+            else:
+                yield '%s/%s' % (obj_name, subname), subobj
+
+
+    if isinstance(pat, str):
+        from fnmatch import translate
+        import re
+        pat = [re.compile(translate(p)) for p in pat.split('/')]
+
+    pit = iter(pat)
+    try:
+        pat = next(pit)
+    except StopIteration:
+        return
+
+    for obj in _iter(o):
+        if not pat.match(obj.GetName()):
+            continue
+        if is_iterable(obj):
+            yield from _walk(obj, copy(pit))
+        else:
+            yield obj.GetName(), obj
+
 
 def get_root_object(obj, paths, delim='/'):
     """
