@@ -90,10 +90,11 @@ def walk_matching(o, pat):
         try:
             pat = next(nn)
         except StopIteration:
+            yield (obj_name, obj)
             return
         for subobj in _iter(obj):
             subname = subobj.GetName()
-            if not pat.match(obj_name):
+            if not pat.match(subname):
                 continue
             if is_iterable(subobj):
                 for n, oo in _walk(subobj, copy(nn)):
