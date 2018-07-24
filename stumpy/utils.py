@@ -6,13 +6,15 @@ Utility methods
 """
 
 
-ROOT_TO_NUMPY_DTYPE = {
-    'C': 'i1',
-    'S': 'i2',
-    'I': 'i4',
-    'F': 'f4',
-    'D': 'f8',
-}
+from enum import Enum
+
+
+class ROOT_TO_NUMPY_DTYPE(Enum):
+    C = 'i1'
+    S = 'i2'
+    I = 'i4'
+    F = 'f4'
+    D = 'f8'
 
 
 def iter_tobject(tobj, pattern=None):
@@ -41,13 +43,16 @@ def iter_tobject(tobj, pattern=None):
             if passes(obj.GetName()):
                 yield obj
 
+
 def is_iterable(s):
     import ROOT
     return (isinstance(s, ROOT.TCollection) or
             isinstance(s, ROOT.TDirectory))
 
+
 def walk_tobject(o):
     import ROOT
+
     def _iter(obj):
         if isinstance(obj, ROOT.TCollection):
             yield from obj
@@ -70,7 +75,6 @@ def walk_tobject(o):
             yield from _walk(obj)
         else:
             yield obj.GetName(), obj
-
 
 
 def walk_matching(o, pat):
@@ -101,7 +105,6 @@ def walk_matching(o, pat):
                     yield '%s/%s' % (obj_name, n), oo
             else:
                 yield '%s/%s' % (obj_name, subname), subobj
-
 
     if isinstance(pat, str):
         from fnmatch import translate
@@ -222,3 +225,6 @@ def enumerate_3d(*args, start=0):
 
 def is_null(obj):
     return obj == None  # noqa
+
+
+del Enum
