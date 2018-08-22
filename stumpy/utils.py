@@ -22,6 +22,10 @@ def iter_tobject(tobj, pattern=None):
     from fnmatch import fnmatch
     import re
 
+    # do nothing if null pointer
+    if not tobj:
+       return
+
     _Regex = type(re.compile(''))
 
     if pattern is None:
