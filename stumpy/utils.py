@@ -190,7 +190,7 @@ def root_histogram_datatype(hist):
         classname = next_class.__name__
         m = re.search('TH[1-3](?P<root_type>[CSIFD])', classname)
         if m:
-            return ROOT_TO_NUMPY_DTYPE[m.group('root_type')]
+            return ROOT_TO_NUMPY_DTYPE[m.group('root_type')].value
     else:
         raise TypeError("Not a root histogram")
 
