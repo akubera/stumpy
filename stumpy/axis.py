@@ -425,7 +425,7 @@ class MultiAxis(tuple, Axis):
             'center': attrgetter('bin_centers'),
             'high': attrgetter('_high_edges'),
         }[point_at]
-        return np.meshgrid(*map(bins, self._axes))
+        return np.meshgrid(*map(bins, self._axes), indexing='ij')
 
     # def __iter__(self):
     #     return super().__iter__()
