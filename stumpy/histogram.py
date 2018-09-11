@@ -135,8 +135,9 @@ class Histogram:
             The shape of the data and error arrays do not match.
         """
         self = cls.__new__(cls)
-        self.axes = copy(axes) if isinstance(axes, MultiAxis) else\
-                    MultiAxis.FromData(axes)
+        self.axes = (copy(axes)
+                     if isinstance(axes, MultiAxis)
+                     else MultiAxis.FromData(axes))
         assert self.axes.shape == np.shape(data), "Data and axes shape mismatch "\
             "(%s ≠ %s)" % (self.axes.shape, np.shape(data))
         self.name = name
@@ -648,7 +649,7 @@ class Histogram:
                 if isinstance(s, slice):
                     summed_axes.append(i)
 
-        res = self.data[ranges].sum(axis=tuple(summed_axes))
+        res = self.data[tuple(ranges)].sum(axis=tuple(summed_axes))
         return res
 
     def project_2d(self, axis_x, axis_y, *axis_ranges,
@@ -881,6 +882,27 @@ class Histogram:
         Simply access this from the axis tuple.
         """
         return self.axes[idx]
+
+    @property
+    def meshgrid_centerbin(self):
+        """
+        Return XYZ
+        """
+        return self.axes.meshgrid('center')
+
+    @property
+    def meshgrid_lowedge(self):
+        """
+        Return XYZ
+        """
+        return self.axes.meshgrid('low')
+
+    def meshgrid_highedge(self):
+        """
+        Return XYZ
+        """
+        return self.axes.meshgrid('high')
+
 
 
 class HistogramRatioPair:

@@ -339,3 +339,51 @@ def test_histogram_division_by_float():
     for ay, by, cy in zip(hist_a.data, hist_b.data, hist_c.data):
         assert cy == ay / 5.5
         assert cy - by < 1e-15
+
+
+def test_meshgrid(ROOT):
+    x = (4, 0.0, 1.0)
+    y = (5, 2.0, 3.0)
+    z = (6, 4.0, 6.0)
+
+    roothist = ROOT.TH3F("_h", "", *x, *y, *z)
+
+    h = Histogram.BuildFromRootHist(roothist)
+
+
+    X = np.array([roothist.GetXaxis().GetBinLowEdge(i+1) for i in range(x[0]+1)])
+    Y = np.array([roothist.GetYaxis().GetBinLowEdge(i+1) for i in range(y[0]+1)])
+    Z = np.array([roothist.GetZaxis().GetBinLowEdge(i+1) for i in range(z[0]+1)])
+
+    assert h.x_axis._low_edges[2] == roothist.GetXaxis().GetBinLowEdge(3)
+    assert X[2] == roothist.GetXaxis().GetBinLowEdge(3)
+
+
+    m = np.meshgrid(X,Y,Z, indexing='ij')
+    mx, my, mz = m
+
+    # print(m)
+
+    assert mx[0,0,0] == x[1]
+    assert my[0,0,0] == y[1]
+    assert m[2][0,0,0] == z[1]
+
+    assert np.all(m[0][0,:,:] == x[1])
+    # assert np.all(m[0][0,:,0] == x[1])
+    assert np.all(m[1][:,0,:] == y[1])
+    assert np.all(m[2][:,:,0] == z[1])
+
+    xx, yy, zz = h.meshgrid_lowedge
+    xx, yy, zz = h.meshgrid_bincenter
+
+    # print(xx.shape)
+    # print(yy.shape)
+    assert xx[0,0,0] == roothist.GetXaxis().GetBinCenter(1)
+    assert xx[1,0,0] == roothist.GetXaxis().GetBinCenter(2)
+    assert xx[2,0,0] == roothist.GetXaxis().GetBinCenter(3)
+    assert xx[3,0,0] == roothist.GetXaxis().GetBinCenter(4)
+    assert np.all(xx[0,:,:] == roothist.GetXaxis().GetBinCenter(1))
+    assert np.all(yy[:,2,:] == roothist.GetYaxis().GetBinCenter(3))
+    # assert xx[0,0,1] == roothist.GetXaxis().GetBinCenter(2)
+    # assert yy[0,0,0] == 2.0
+    # assert zz[0,0,0] == 3.0
