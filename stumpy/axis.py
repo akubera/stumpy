@@ -19,8 +19,8 @@ class ByEdge(Enum):
     Center = 2
 
     @classmethod
-    def From(self, name):
-        ...
+    def From(cls, name):
+        return cls[name[0].upper() + ''.join(map(str.lower, name[1:]))]
 
 
 class Axis:
